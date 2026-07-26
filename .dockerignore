@@ -1,0 +1,15 @@
+.git
+.gitignore
+.python-version
+.venv
+__pycache__
+*.pyc
+.env
+metrics.sql
+metrics.sql-wal
+metrics.sql-shm
+graphs/*.png
+.vscode
+assets
+README.md
+LICENSE

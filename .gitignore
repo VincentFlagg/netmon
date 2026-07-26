@@ -1,5 +1,7 @@
 .env
 metrics.sql
+metrics.sql-wal
+metrics.sql-shm
 __pycache__/
 *.pyc
 .venv/

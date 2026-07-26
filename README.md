@@ -24,6 +24,8 @@ A lightweight local bot that runs a speed test on your network every 30 minutes,
 
 Every 4 hours, it delivers a **detailed report** complete with a 24-hour trend graph and a sarcastic, LLM-generated commentary on your network's behavior (*"someone's hogging the bandwidth again"*).
 
+It also serves a **local web dashboard** (latest metrics, the 24-hour graph, a history table, an on-demand "run speed test now" button, and CSV export) that runs alongside Telegram/Discord — and ships with a **Dockerfile + Compose file** for one-command deployment.
+
 > [!NOTE]
 > **100% Private & Self-Hosted:** No external metric servers involved — everything runs locally on your machine or Raspberry Pi. Only text reports and graph images are dispatched to your chosen notifier (Telegram or Discord).
 
@@ -129,6 +131,9 @@ cp .env.example .env
 | `DISCORD_WEBHOOK_URL` | Discord channel webhook URL — required if `NOTIFIER=discord` |
 | `DB_PATH` | SQLite database file path (e.g. `metrics.sql`) |
 | `REQUEST_TIMEOUT` | *Optional.* HTTP timeout in seconds for Telegram/Discord requests (positive integer, default `30`) |
+| `WEB_ENABLED` | *Optional.* Serve the web dashboard (`true`/`false`, default `true`) |
+| `WEB_HOST` | *Optional.* Dashboard bind address (default `0.0.0.0`; use `127.0.0.1` for localhost-only) |
+| `WEB_PORT` | *Optional.* Dashboard port (default `8080`) |
 
 > [!TIP]
 > **You're not locked into OpenAI.** `ai.py` talks to any OpenAI-compatible endpoint, so a local inference server (e.g. [Ollama](https://ollama.com), LM Studio) works too — just point `AI_BASE_URL` at it. For report quality that holds up, use a model with **at least ~7B parameters**; a solid local pick is **Gemma 4 12B at 4-bit (QAT) quantization** (`gemma4:12b-it-qat` via Ollama), which fits comfortably on 16GB of RAM.
@@ -143,6 +148,49 @@ uv run main.py
 
 > [!TIP]
 > Run the bot inside `tmux`/`screen` or set it up as a system service (`systemd`/`launchd`) to keep it running 24/7 in the background.
+
+---
+
+## Web Dashboard
+
+Alongside the Telegram/Discord alerts, netmon serves a lightweight **local web dashboard** — no extra dependencies, it's built on Python's standard library. Once the bot is running, open:
+
+```
+http://<host>:8080
+```
+
+The dashboard shows:
+
+* **Latest metrics** — download, upload, ping, device count, and ISP at a glance.
+* **24-hour graph** — the same `matplotlib` chart that goes to your notifier, refreshed automatically.
+* **History table** — the most recent measurements.
+* **Run speed test now** — a button that triggers an immediate measurement on demand (it stores the result and sends a mini report, without disturbing the scheduled 4-hour detailed-report cadence).
+* **Download CSV** — export the recent metrics as a spreadsheet-friendly file.
+
+The page auto-refreshes every 30 seconds. Configure it with `WEB_ENABLED`, `WEB_HOST`, and `WEB_PORT` (see the `.env` table above), or set `WEB_ENABLED=false` to turn it off entirely.
+
+> [!WARNING]
+> The dashboard has **no authentication** and exposes a button that triggers speed tests plus a data export. Keep it on a trusted LAN. To restrict it to the local machine, set `WEB_HOST=127.0.0.1`; to expose it more widely, put it behind a reverse proxy that adds authentication.
+
+---
+
+## Docker
+
+netmon ships with a `Dockerfile` and `docker-compose.yml`. The image bundles `nmap`, `speedtest-cli`, and the locked Python dependencies, so you don't install anything on the host except Docker itself.
+
+```bash
+cp .env.example .env    # fill in your tokens / API key
+docker compose up -d --build
+```
+
+Then open `http://localhost:8080`. The SQLite database is persisted in a named volume (`netmon-data`), so your history survives rebuilds.
+
+> [!IMPORTANT]
+> **Host networking is required.** The Compose file uses `network_mode: host` plus the `NET_RAW`/`NET_ADMIN` capabilities so the `nmap` ARP scan can see real devices on your LAN. A container on Docker's default bridge network is behind NAT and can only scan the bridge subnet, which would make device counts meaningless.
+>
+> Host networking is **Linux-only** — it does not work on Docker Desktop for macOS/Windows. On those platforms, run netmon directly with `uv run main.py` instead (the LAN scan needs to be on the same network as your devices anyway).
+
+Because the container already runs as root, the passwordless-`sudo` setup from the [Quick Start](#2-allow-passwordless-nmap-one-time) is **not** needed inside Docker.
 
 ---
 
@@ -256,7 +304,9 @@ Expect periodic speed drops whenever local freeloaders stream 4K movies or the I
 netmon/
 ├── assets/                        # Logo & documentation media assets
 ├── graphs/                        # Generated 24h matplotlib graph images
-├── main.py                        # Main execution loop & orchestrator
+├── main.py                        # Entry point: wires everything & runs the scheduler loop
+├── service.py                     # Monitor: one measurement cycle, shared by loop & web
+├── webapp.py                      # Standard-library web dashboard (HTTP server + UI)
 ├── runner.py                      # Speedtest-cli and nmap scan execution & parsing
 ├── sqlite.py                      # SQLite database operations & schema management
 ├── models.py                      # Domain data models (NetworkMetric, SpeedTest)
@@ -266,6 +316,8 @@ netmon/
 ├── discord_hook.py                # Discord webhook dispatch helper
 ├── config.py                      # Environment variable validation & config
 ├── notifier.py                    # Notifier protocol & shared chat-action enum
+├── Dockerfile                     # Container image (bundles nmap + speedtest-cli)
+├── docker-compose.yml             # One-command deploy with host networking & volume
 ├── pyproject.toml                 # Project metadata & dependencies
 ├── uv.lock                        # Locked, reproducible dependency versions
 └── LICENSE                        # MIT License file
