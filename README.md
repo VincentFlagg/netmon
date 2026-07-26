@@ -185,6 +185,19 @@ docker compose up -d --build
 
 Then open `http://localhost:8080`. The SQLite database is persisted in a named volume (`netmon-data`), so your history survives rebuilds.
 
+### NAS deployment (Dockge / Portainer / Container Manager)
+
+For a NAS, use the ready-made `docker-compose.nas.yml` variant instead — it swaps the named volume for a bind mount (`./data`, so the database is visible on your NAS shares and easy to back up) and makes the dashboard port overridable via `WEB_PORT`:
+
+```bash
+# in your stack manager's stacks dir, e.g. /opt/stacks or /volume1/docker/stacks
+git clone -b claude/docker-build-web-page-6k3od3 https://github.com/VincentFlagg/netmon.git netmon
+cd netmon && cp .env.example .env   # then edit .env
+docker compose -f docker-compose.nas.yml up -d --build
+```
+
+In Dockge/Portainer, point the stack at `docker-compose.nas.yml` and deploy from the UI. Set `WEB_PORT` in `.env` (e.g. `WEB_PORT=8081`) if `8080` clashes with your NAS UI. Host networking still applies — see the note above.
+
 > [!IMPORTANT]
 > **Host networking is required.** The Compose file uses `network_mode: host` plus the `NET_RAW`/`NET_ADMIN` capabilities so the `nmap` ARP scan can see real devices on your LAN. A container on Docker's default bridge network is behind NAT and can only scan the bridge subnet, which would make device counts meaningless.
 >
