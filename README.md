@@ -198,6 +198,12 @@ docker compose -f docker-compose.nas.yml up -d --build
 
 In Dockge/Portainer, point the stack at `docker-compose.nas.yml` and deploy from the UI. Set `WEB_PORT` in `.env` (e.g. `WEB_PORT=8081`) if `8080` clashes with your NAS UI. Host networking still applies — see the note above.
 
+#### Paste-and-go stack (no source checkout)
+
+If you'd rather create a stack in the Dockge/Portainer UI and just paste a compose file, use `dockge-stack.yml`. It pulls a **pre-built image from GHCR** instead of building from source, and carries its config inline under `environment:` so there's no separate `.env` to manage — paste it, edit the placeholder values, deploy.
+
+This requires the image to be published first. The included GitHub Action (`.github/workflows/docker-publish.yml`) builds and pushes it to `ghcr.io/<owner>/netmon` on every push (and on `v*` tags). After the first run, set the GHCR package to **Public** so your NAS can pull it without logging in.
+
 > [!IMPORTANT]
 > **Host networking is required.** The Compose file uses `network_mode: host` plus the `NET_RAW`/`NET_ADMIN` capabilities so the `nmap` ARP scan can see real devices on your LAN. A container on Docker's default bridge network is behind NAT and can only scan the bridge subnet, which would make device counts meaningless.
 >
