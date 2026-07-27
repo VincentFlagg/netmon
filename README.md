@@ -235,6 +235,61 @@ This requires the image to be published first. The included GitHub Action (`.git
 
 Because the container already runs as root, the passwordless-`sudo` setup from the [Quick Start](#2-allow-passwordless-nmap-one-time) is **not** needed inside Docker.
 
+#### Annotated example (line by line)
+
+A real-world stack — pre-built image, ntfy notifier, AI disabled, and the database bind-mounted to a NAS folder:
+
+```yaml
+services:
+  netmon:                                       # service name
+    image: ghcr.io/vincentflagg/netmon:latest   # pre-built image; pin e.g. :1.0.0 for reproducible upgrades
+    container_name: netmon                       # fixed container name shown in Docker/Dockge
+    restart: unless-stopped                      # auto-restart on crash or NAS reboot
+    network_mode: host                           # REQUIRED: lets the nmap LAN scan see real devices
+    cap_add:                                     # raw-socket permissions the ARP scan needs
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      # --- AI commentary (OPTIONAL — set all three, or comment out all three) ---
+      # AI_API_KEY: "sk-..."                     # commented out here => reports have no AI text
+      # AI_MODEL: "gpt-4o-mini"
+      # AI_BASE_URL: "https://api.openai.com/v1"
+
+      # --- Notifier: keep only the block for your choice ---
+      #     ("telegram" | "discord" | "ntfy" | "none")
+      NOTIFIER: "ntfy"
+      NTFY_URL: "http://192.168.0.24:8085/Netmon"  # full ntfy topic URL (http:// if your server has no TLS)
+      NTFY_USER: "user"                            # omit NTFY_USER/PASSWORD for a public/unprotected topic
+      NTFY_PASSWORD: "password"
+
+      # --- Storage & web dashboard ---
+      DB_PATH: "/data/metrics.sql"               # DB path INSIDE the container (not the host path)
+      WEB_HOST: "0.0.0.0"                        # bind on all interfaces
+      WEB_PORT: "8080"                           # dashboard at http://<nas-ip>:8080
+    volumes:
+      - /volume2/docker/data:/data               # <host folder>:<container folder>
+```
+
+**What each line does:**
+
+| Line | Meaning / how to use it |
+| :-- | :-- |
+| `image:` | Which published image to run. `:latest` follows the newest release; pin `:1.0.0` (or `:1.0`) so upgrades only happen when you change this. |
+| `container_name:` | The name Docker/Dockge shows. Cosmetic. |
+| `restart: unless-stopped` | Restarts the container automatically unless you stop it by hand. Leave as-is. |
+| `network_mode: host` | **Mandatory.** The container shares the NAS's network so `nmap` can scan your real LAN. Do not remove; with it, `WEB_PORT` binds directly on the NAS and no `ports:` mapping is used. |
+| `cap_add: NET_RAW / NET_ADMIN` | Grants the raw-socket access the ARP scan needs. Leave as-is. |
+| `AI_API_KEY` / `AI_MODEL` / `AI_BASE_URL` | Optional, all-or-nothing. Set all three for the sarcastic AI report text; comment out all three (as here) to run without AI. |
+| `NOTIFIER` | Which service gets alerts: `telegram`, `discord`, `ntfy`, or `none` (dashboard-only). Keep only the credential lines for the one you pick — the others are ignored, but it's cleaner to delete them. |
+| `NTFY_URL` | The full ntfy topic URL. Use `http://` if your ntfy server has no TLS (a `https://` typo on a plain-HTTP server gives an SSL "wrong version number" error). |
+| `NTFY_USER` / `NTFY_PASSWORD` | ntfy Basic-auth credentials, only for protected topics. Omit both for a public topic, or use `NTFY_TOKEN` instead. |
+| `DB_PATH` | Where the SQLite file lives **inside the container**. Keep it under `/data` so it lands on the mounted volume. |
+| `WEB_HOST` / `WEB_PORT` | Dashboard bind address and port. Change `WEB_PORT` if `8080` clashes with something on the NAS. |
+| `volumes: - /volume2/docker/data:/data` | Maps a **host folder** (left) to the container's `/data` (right). Combined with `DB_PATH=/data/metrics.sql`, your database is at `/volume2/docker/data/metrics.sql` on the NAS — that's where to look for it (plus its `-wal` / `-shm` WAL companions). Change the left side to any real path on your NAS. |
+
+> [!TIP]
+> **Where's my database file?** With the volume above, it's `/volume2/docker/data/metrics.sql` on the NAS. `DB_PATH` is the path *inside* the container; the `volumes:` mapping is what puts it on disk. netmon uses SQLite WAL mode, so expect three files: `metrics.sql`, `metrics.sql-wal`, `metrics.sql-shm`. Check with `docker exec netmon ls -la /data`.
+
 ---
 
 ## Notifications: Telegram, Discord, ntfy, or none
