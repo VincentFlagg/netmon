@@ -1,0 +1,55 @@
+# netmon — paste-ready stack for Dockge / Portainer / Container Manager.
+#
+# This pulls a PRE-BUILT image from GHCR (no source checkout, no building),
+# so you can create a new stack in the UI, paste this in, edit the values
+# under `environment:`, and deploy.
+#
+# Prerequisites (one time):
+#   1. The image must be published — run the "Publish Docker image" GitHub
+#      Action (merge to the default branch, or trigger it manually), then set
+#      the GHCR package to Public so your NAS can pull it without logging in.
+#   2. If you keep the package private, log Docker in on the NAS first:
+#      `docker login ghcr.io` with a GitHub personal access token (read:packages).
+#
+# NOTE: replace `vincentflagg` below if your GitHub owner differs (it must be
+# lowercase). Dashboard: http://<nas-ip>:8080
+
+services:
+  netmon:
+    image: ghcr.io/vincentflagg/netmon:latest
+    container_name: netmon
+    restart: unless-stopped
+
+    # REQUIRED for the nmap LAN scan to see real devices. Works on Linux-based
+    # NAS Docker. With host networking the dashboard binds to <nas-ip>:WEB_PORT
+    # directly, so no `ports:` section is needed.
+    network_mode: host
+
+    # Raw sockets for the ARP scan.
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+
+    environment:
+      # --- AI (any OpenAI-compatible endpoint) ---
+      AI_API_KEY: "sk-REPLACE_ME"
+      AI_MODEL: "gpt-4o-mini"
+      AI_BASE_URL: "https://api.openai.com/v1"
+
+      # --- Notifier: "telegram" (default) or "discord" ---
+      NOTIFIER: "telegram"
+      TG_BOT_TOKEN: "123456:AA_REPLACE_ME"
+      TG_CHAT_ID: "123456789"
+      # For Discord instead, set NOTIFIER: "discord" and fill this in:
+      # DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/XXX/YYY"
+
+      # --- Storage & web dashboard ---
+      DB_PATH: "/data/metrics.sql"
+      WEB_HOST: "0.0.0.0"
+      WEB_PORT: "8080"          # change if 8080 clashes with your NAS UI
+
+    volumes:
+      # Database is bind-mounted so it survives updates and is easy to back up.
+      # Host path is relative to the stack folder; use an absolute NAS path if
+      # you prefer, e.g. /volume1/docker/netmon/data:/data
+      - ./data:/data

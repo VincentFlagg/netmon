@@ -1,7 +1,10 @@
 .env
 metrics.sql
+metrics.sql-wal
+metrics.sql-shm
 __pycache__/
 *.pyc
 .venv/
 .vscode/
-pyrightconfig.jsongraphs/*.png
+pyrightconfig.json
+graphs/*.png

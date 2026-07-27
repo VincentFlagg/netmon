@@ -1,0 +1,33 @@
+services:
+  netmon:
+    build: .
+    container_name: netmon
+    restart: unless-stopped
+
+    # Host networking is REQUIRED for the nmap ARP scan to see real LAN devices.
+    # A container on Docker's default bridge network sits behind NAT and can only
+    # scan the bridge subnet, so device counts would be wrong. Host networking is
+    # Linux-only (it does not work on Docker Desktop for macOS/Windows); on those
+    # platforms run netmon directly with `uv run main.py` instead.
+    network_mode: host
+
+    # Raw sockets for the ARP scan.
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+
+    env_file:
+      - .env
+
+    # The DB lives on the volume so history survives container rebuilds.
+    # This overrides DB_PATH from .env.
+    environment:
+      DB_PATH: /data/metrics.sql
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: 8080
+
+    volumes:
+      - netmon-data:/data
+
+volumes:
+  netmon-data:

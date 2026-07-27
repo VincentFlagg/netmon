@@ -1,0 +1,47 @@
+# NAS-friendly Compose variant (Dockge / Portainer / Container Manager).
+#
+# Differences from docker-compose.yml:
+#   * Uses a BIND MOUNT (./data) instead of a named volume, so the SQLite
+#     database sits in a folder you can see and back up from your NAS shares.
+#   * Exposes WEB_PORT as an overridable variable so you can dodge a port
+#     clash with the NAS UI without editing this file.
+#
+# Deploy: put this repo in your Dockge stacks dir (e.g. /opt/stacks/netmon or
+# /volume1/docker/stacks/netmon), create .env from .env.example, then deploy.
+services:
+  netmon:
+    build: .
+    container_name: netmon
+    restart: unless-stopped
+
+    # Host networking is REQUIRED for the nmap ARP scan to see real LAN devices.
+    # A container on Docker's default bridge network sits behind NAT and can only
+    # scan the bridge subnet, so device counts would be wrong. This works on
+    # Linux-based NAS Docker (Synology, TrueNAS SCALE, etc.). With host
+    # networking the dashboard binds directly to <nas-ip>:${WEB_PORT} — the
+    # usual port-mapping/"ports:" section does nothing, so it's intentionally
+    # omitted.
+    network_mode: host
+
+    # Raw sockets for the ARP scan.
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+
+    env_file:
+      - .env
+
+    environment:
+      # DB lives on the bind mount below so history survives rebuilds.
+      # Overrides DB_PATH from .env.
+      DB_PATH: /data/metrics.sql
+      WEB_HOST: 0.0.0.0
+      # Change the dashboard port here (or set WEB_PORT in .env) if 8080 is
+      # already taken on your NAS.
+      WEB_PORT: ${WEB_PORT:-8080}
+
+    volumes:
+      # Host path is relative to this compose file's folder. Point it at an
+      # absolute NAS path instead if you prefer, e.g.
+      #   - /volume1/docker/netmon/data:/data
+      - ./data:/data

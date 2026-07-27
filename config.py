@@ -18,7 +18,10 @@ class Config:
         tg_bot_token: str = "",
         tg_chat_id: str = "",
         discord_webhook_url: str = "",
-        request_timeout: int = DEFAULT_REQUEST_TIMEOUT
+        request_timeout: int = DEFAULT_REQUEST_TIMEOUT,
+        web_enabled: bool = True,
+        web_host: str = "0.0.0.0",
+        web_port: int = 8080,
     ):
         self.ai_api_key: str = ai_api_key
         self.db_path: str = db_path
@@ -29,6 +32,9 @@ class Config:
         self.tg_chat_id: str = tg_chat_id
         self.discord_webhook_url: str = discord_webhook_url
         self.request_timeout: int = request_timeout
+        self.web_enabled: bool = web_enabled
+        self.web_host: str = web_host
+        self.web_port: int = web_port
 
     @staticmethod
     def _parse_args():
@@ -72,6 +78,15 @@ class Config:
         if request_timeout <= 0:
             raise RuntimeError(f"REQUEST_TIMEOUT must be positive, got: {request_timeout}")
 
+        web_enabled = os.getenv("WEB_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off")
+        web_host = os.getenv("WEB_HOST", "0.0.0.0").strip() or "0.0.0.0"
+        try:
+            web_port = int(os.getenv("WEB_PORT", "8080"))
+        except ValueError:
+            raise RuntimeError("WEB_PORT must be an integer")
+        if not (1 <= web_port <= 65535):
+            raise RuntimeError(f"WEB_PORT must be between 1 and 65535, got: {web_port}")
+
         if notifier == "telegram":
             if tg_bot_token.strip() == "":
                 raise RuntimeError("TG_BOT_TOKEN not found or empty in environment")
@@ -85,4 +100,5 @@ class Config:
             ai_key, db_path, model, base_url, notifier,
             tg_bot_token, tg_chat_id, discord_webhook_url,
             request_timeout,
+            web_enabled, web_host, web_port,
         )

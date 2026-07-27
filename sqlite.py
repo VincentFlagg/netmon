@@ -1,5 +1,6 @@
 import json
 import models
+import threading
 from contextlib import closing, contextmanager
 from contextvars import ContextVar
 import sqlite3
@@ -13,6 +14,11 @@ _tx_depth: ContextVar[int] = ContextVar("tx_depth", default=0)
 class DB:
     def __init__(self, conn: sqlite3.Connection):
         self.conn: sqlite3.Connection = conn
+        # The scheduler loop and the web server run in separate threads and
+        # share this single connection, so every access is serialised through
+        # a reentrant lock. RLock (not Lock) because the write path nests
+        # transaction() calls inside one another on the same thread.
+        self._lock = threading.RLock()
 
     def __enter__(self) -> "DB":
         return self
@@ -26,8 +32,13 @@ class DB:
             raise ValueError("Database path cannot be empty")
 
         try:
-            conn = sqlite3.connect(path)
+            # check_same_thread=False: the connection is shared between the
+            # scheduler and web-server threads, but all access is serialised by
+            # self._lock, so this is safe. WAL mode lets the dashboard read
+            # while a write is in flight instead of blocking on a locked file.
+            conn = sqlite3.connect(path, check_same_thread=False)
             conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA journal_mode = WAL")
 
             db = cls(conn)
             with db.transaction():
@@ -75,7 +86,7 @@ class DB:
 
         try:
             if depth == 0:
-                with self.conn:
+                with self._lock, self.conn:
                     yield
             else:
                 yield
@@ -118,79 +129,105 @@ class DB:
                 VALUES (?, ?, ?)
             """, (str(speedtest.id), str(speedtest.metric_id), str(speedtest.device_scan_id)))
 
+    def _fetchall(self, sql: str, params: tuple = ()) -> list:
+        # Every read goes through here so it holds self._lock while touching the
+        # shared connection — keeps the web thread's queries from racing the
+        # scheduler thread's writes.
+        with self._lock:
+            try:
+                with closing(self.conn.cursor()) as cursor:
+                    cursor.execute(sql, params)
+                    return cursor.fetchall()
+            except sqlite3.Error as e:
+                raise RuntimeError(f"Query failed: {e}")
+
+    @staticmethod
+    def _row_to_metric(row) -> models.NetworkMetric:
+        return models.NetworkMetric(
+            id=uuid.UUID(row[0]),
+            download=row[1],
+            upload=row[2],
+            ping=row[3],
+            timestamp=datetime.fromisoformat(row[4]),
+            share=row[5],
+            client=row[6],
+            server=row[7],
+            bytes_sent=row[8],
+            bytes_received=row[9]
+        )
+
     def get_metrics(self) -> list[models.NetworkMetric]:
-        try:
-            with closing(self.conn.cursor()) as cursor:
-                cursor.execute("""
-                    SELECT * FROM (
-                        SELECT id, download, upload, ping, timestamp, share, client, server, bytes_sent, bytes_received
-                        FROM metrics
-                        WHERE timestamp > DATETIME('now', '-24 hours')
-                        ORDER BY timestamp DESC
-                        LIMIT 24
-                    ) ORDER BY timestamp ASC;
-                """)
-                rows = cursor.fetchall()
-        except sqlite3.Error as e:
-            raise RuntimeError(f"Failed to get metrics: {e}")
-
-        if not rows:
-            return []
-
-        return [
-            models.NetworkMetric(
-                id=uuid.UUID(row[0]),
-                download=row[1],
-                upload=row[2],
-                ping=row[3],
-                timestamp=datetime.fromisoformat(row[4]),
-                share=row[5],
-                client=row[6],
-                server=row[7],
-                bytes_sent=row[8],
-                bytes_received=row[9]
-            )
-            for row in rows
-        ]
+        rows = self._fetchall("""
+            SELECT * FROM (
+                SELECT id, download, upload, ping, timestamp, share, client, server, bytes_sent, bytes_received
+                FROM metrics
+                WHERE timestamp > DATETIME('now', '-24 hours')
+                ORDER BY timestamp DESC
+                LIMIT 24
+            ) ORDER BY timestamp ASC;
+        """)
+        return [self._row_to_metric(row) for row in rows]
 
     def get_metrics_with_device_counts(self) -> tuple[list[models.NetworkMetric], list[int]]:
-        try:
-            with closing(self.conn.cursor()) as cursor:
-                cursor.execute("""
-                    SELECT * FROM (
-                        SELECT m.id, m.download, m.upload, m.ping, m.timestamp, m.share, m.client, m.server,
-                               m.bytes_sent, m.bytes_received, ds.ips
-                        FROM metrics m
-                        JOIN speedtest st ON st.metrics_id = m.id
-                        JOIN device_scans ds ON ds.id = st.device_scans_id
-                        WHERE m.timestamp > DATETIME('now', '-24 hours')
-                        ORDER BY m.timestamp DESC
-                        LIMIT 24
-                    ) ORDER BY timestamp ASC;
-                """)
-                rows = cursor.fetchall()
-        except sqlite3.Error as e:
-            raise RuntimeError(f"Failed to get metrics with device counts: {e}")
+        rows = self._fetchall("""
+            SELECT * FROM (
+                SELECT m.id, m.download, m.upload, m.ping, m.timestamp, m.share, m.client, m.server,
+                       m.bytes_sent, m.bytes_received, ds.ips
+                FROM metrics m
+                JOIN speedtest st ON st.metrics_id = m.id
+                JOIN device_scans ds ON ds.id = st.device_scans_id
+                WHERE m.timestamp > DATETIME('now', '-24 hours')
+                ORDER BY m.timestamp DESC
+                LIMIT 24
+            ) ORDER BY timestamp ASC;
+        """)
 
         metrics: list[models.NetworkMetric] = []
         device_counts: list[int] = []
-
         for row in rows:
-            metrics.append(models.NetworkMetric(
-                id=uuid.UUID(row[0]),
-                download=row[1],
-                upload=row[2],
-                ping=row[3],
-                timestamp=datetime.fromisoformat(row[4]),
-                share=row[5],
-                client=row[6],
-                server=row[7],
-                bytes_sent=row[8],
-                bytes_received=row[9]
-            ))
+            metrics.append(self._row_to_metric(row))
+            device_counts.append(len(json.loads(row[10])))
+
+        return metrics, device_counts
+
+    def get_latest_with_device_count(self) -> tuple[models.NetworkMetric, int] | None:
+        # Most recent single reading, used by the web dashboard's status panel.
+        rows = self._fetchall("""
+            SELECT m.id, m.download, m.upload, m.ping, m.timestamp, m.share, m.client, m.server,
+                   m.bytes_sent, m.bytes_received, ds.ips
+            FROM metrics m
+            JOIN speedtest st ON st.metrics_id = m.id
+            JOIN device_scans ds ON ds.id = st.device_scans_id
+            ORDER BY m.timestamp DESC
+            LIMIT 1;
+        """)
+        if not rows:
+            return None
+        row = rows[0]
+        return self._row_to_metric(row), len(json.loads(row[10]))
+
+    def get_recent_with_device_counts(self, limit: int = 50) -> tuple[list[models.NetworkMetric], list[int]]:
+        # Newest-first history for the dashboard table. Bounded so the web page
+        # can't ask for an unbounded result set.
+        limit = max(1, min(int(limit), 500))
+        rows = self._fetchall("""
+            SELECT m.id, m.download, m.upload, m.ping, m.timestamp, m.share, m.client, m.server,
+                   m.bytes_sent, m.bytes_received, ds.ips
+            FROM metrics m
+            JOIN speedtest st ON st.metrics_id = m.id
+            JOIN device_scans ds ON ds.id = st.device_scans_id
+            ORDER BY m.timestamp DESC
+            LIMIT ?;
+        """, (limit,))
+
+        metrics: list[models.NetworkMetric] = []
+        device_counts: list[int] = []
+        for row in rows:
+            metrics.append(self._row_to_metric(row))
             device_counts.append(len(json.loads(row[10])))
 
         return metrics, device_counts
 
     def close(self):
-        self.conn.close()
+        with self._lock:
+            self.conn.close()
