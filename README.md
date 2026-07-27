@@ -188,6 +188,25 @@ docker compose up -d --build
 
 Then open `http://localhost:8080`. The SQLite database is persisted in a named volume (`netmon-data`), so your history survives rebuilds.
 
+### Image versions
+
+Pre-built images are published to `ghcr.io/vincentflagg/netmon` and tagged with [semantic versions](https://semver.org):
+
+| Tag | Points to |
+| :-- | :-- |
+| `1.0.0` | that exact release (pin this for reproducible deploys) |
+| `1.0` | the latest `1.0.x` patch |
+| `1` | the latest `1.x` release |
+| `latest` | the newest release |
+
+In an image-based stack (e.g. `dockge-stack.yml`), pin a version to control upgrades:
+
+```yaml
+    image: ghcr.io/vincentflagg/netmon:1.0.0   # instead of :latest
+```
+
+See **[CHANGELOG.md](CHANGELOG.md)** for what changed in each version. To publish a new version, push a `v*` git tag (e.g. `git tag v1.1.0 && git push origin v1.1.0`) — the GitHub Action builds and tags the image to match.
+
 ### NAS deployment (Dockge / Portainer / Container Manager)
 
 For a NAS, use the ready-made `docker-compose.nas.yml` variant instead — it swaps the named volume for a bind mount (`./data`, so the database is visible on your NAS shares and easy to back up) and makes the dashboard port overridable via `WEB_PORT`:
