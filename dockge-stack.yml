@@ -37,14 +37,18 @@ services:
       AI_MODEL: "gpt-4o-mini"
       AI_BASE_URL: "https://api.openai.com/v1"
 
-      # --- Notifier: "telegram" (default), "discord", or "none" ---
-      # NOTIFIER: "none"  -> dashboard-only; delete the TG_*/DISCORD_* lines and
-      #                      just use http://<nas-ip>:8080 (needs the web on).
+      # --- Notifier: "telegram" (default), "discord", "ntfy", or "none" ---
+      # NOTIFIER: "none"  -> dashboard-only; delete the TG_*/DISCORD_*/NTFY_* lines
+      #                      and just use http://<nas-ip>:8080 (needs the web on).
       NOTIFIER: "telegram"
       TG_BOT_TOKEN: "123456:AA_REPLACE_ME"
       TG_CHAT_ID: "123456789"
       # For Discord instead, set NOTIFIER: "discord" and fill this in:
       # DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/XXX/YYY"
+      # For ntfy instead, set NOTIFIER: "ntfy" and give the full topic URL
+      # (NTFY_TOKEN only needed for protected topics):
+      # NTFY_URL: "https://ntfy.sh/your-unique-netmon-topic"
+      # NTFY_TOKEN: "tk_xxxxxxxxxxxxxxxx"
 
       # --- Storage & web dashboard ---
       DB_PATH: "/data/metrics.sql"

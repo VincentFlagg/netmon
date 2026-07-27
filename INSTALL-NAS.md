@@ -24,7 +24,10 @@ Before you start, make sure you have:
      your numeric chat ID, **or**
    - **Discord:** a channel webhook URL
      (Server Settings → Integrations → Webhooks → New Webhook → Copy URL), **or**
-   - **Nothing** — set `NOTIFIER: "none"` to skip Telegram/Discord entirely and
+   - **ntfy:** subscribe to a unique topic in the ntfy app and use its URL
+     (e.g. `https://ntfy.sh/my-netmon-a8f3z2`) — no bot/webhook setup, and it
+     self-hosts nicely alongside your NAS, **or**
+   - **Nothing** — set `NOTIFIER: "none"` to skip push notifications entirely and
      just use the web dashboard (see
      [Don't want Telegram or Discord?](#dont-want-telegram-or-discord) below).
 3. **An AI endpoint** *(optional)* — an API key for any OpenAI-compatible service
@@ -120,9 +123,10 @@ In the pasted YAML, replace the placeholders under `environment:`:
 | `AI_API_KEY` | Your OpenAI-compatible API key |
 | `AI_MODEL` | e.g. `gpt-4o-mini`, or your local model name |
 | `AI_BASE_URL` | `https://api.openai.com/v1`, or your local server URL |
-| `NOTIFIER` | `telegram` or `discord` |
+| `NOTIFIER` | `telegram`, `discord`, `ntfy`, or `none` |
 | `TG_BOT_TOKEN` / `TG_CHAT_ID` | Your Telegram values (if using Telegram) |
 | `DISCORD_WEBHOOK_URL` | Your webhook (if using Discord — and uncomment the line) |
+| `NTFY_URL` / `NTFY_TOKEN` | Your ntfy topic URL (if using ntfy — uncomment; token only for protected topics) |
 | `WEB_PORT` | Leave `8080`, or change it if that port is taken |
 
 Leave `DB_PATH`, `WEB_HOST`, the `volumes:`, `network_mode:` and `cap_add:`
