@@ -126,7 +126,8 @@ In the pasted YAML, replace the placeholders under `environment:`:
 | `NOTIFIER` | `telegram`, `discord`, `ntfy`, or `none` |
 | `TG_BOT_TOKEN` / `TG_CHAT_ID` | Your Telegram values (if using Telegram) |
 | `DISCORD_WEBHOOK_URL` | Your webhook (if using Discord — and uncomment the line) |
-| `NTFY_URL` / `NTFY_TOKEN` | Your ntfy topic URL (if using ntfy — uncomment; token only for protected topics) |
+| `NTFY_URL` | Your ntfy topic URL (if using ntfy — uncomment) |
+| `NTFY_TOKEN` *or* `NTFY_USER`+`NTFY_PASSWORD` | Only for protected ntfy topics — a token, or username/password (public topics need neither) |
 | `WEB_PORT` | Leave `8080`, or change it if that port is taken |
 
 Leave `DB_PATH`, `WEB_HOST`, the `volumes:`, `network_mode:` and `cap_add:`

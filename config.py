@@ -20,6 +20,8 @@ class Config:
         discord_webhook_url: str = "",
         ntfy_url: str = "",
         ntfy_token: str = "",
+        ntfy_user: str = "",
+        ntfy_password: str = "",
         request_timeout: int = DEFAULT_REQUEST_TIMEOUT,
         web_enabled: bool = True,
         web_host: str = "0.0.0.0",
@@ -36,6 +38,8 @@ class Config:
         self.discord_webhook_url: str = discord_webhook_url
         self.ntfy_url: str = ntfy_url
         self.ntfy_token: str = ntfy_token
+        self.ntfy_user: str = ntfy_user
+        self.ntfy_password: str = ntfy_password
         self.request_timeout: int = request_timeout
         self.web_enabled: bool = web_enabled
         self.web_host: str = web_host
@@ -87,6 +91,8 @@ class Config:
         discord_webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
         ntfy_url = os.getenv("NTFY_URL", "")
         ntfy_token = os.getenv("NTFY_TOKEN", "")
+        ntfy_user = os.getenv("NTFY_USER", "")
+        ntfy_password = os.getenv("NTFY_PASSWORD", "")
 
         request_timeout = int(os.getenv("REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT))
         if request_timeout <= 0:
@@ -112,6 +118,12 @@ class Config:
         elif notifier == "ntfy":
             if ntfy_url.strip() == "":
                 raise RuntimeError("NTFY_URL not found or empty in environment")
+            # Basic auth is user+password together; reject a half-configured pair.
+            if bool(ntfy_user.strip()) != bool(ntfy_password):
+                raise RuntimeError(
+                    "For ntfy basic auth, set both NTFY_USER and NTFY_PASSWORD "
+                    "(or neither, or use NTFY_TOKEN instead)."
+                )
         # notifier == "none": dashboard-only, no notifier credentials needed.
 
         if notifier == "none" and web_enabled is False:
@@ -123,7 +135,7 @@ class Config:
         return cls(
             ai_key, db_path, model, base_url, notifier,
             tg_bot_token, tg_chat_id, discord_webhook_url,
-            ntfy_url, ntfy_token,
+            ntfy_url, ntfy_token, ntfy_user, ntfy_password,
             request_timeout,
             web_enabled, web_host, web_port,
             ai_enabled=len(ai_set) == 3,
