@@ -200,6 +200,8 @@ In Dockge/Portainer, point the stack at `docker-compose.nas.yml` and deploy from
 
 #### Paste-and-go stack (no source checkout)
 
+> **UGREEN NAS + Dockge users:** there's a full click-by-click walkthrough in **[INSTALL-NAS.md](INSTALL-NAS.md)**.
+
 If you'd rather create a stack in the Dockge/Portainer UI and just paste a compose file, use `dockge-stack.yml`. It pulls a **pre-built image from GHCR** instead of building from source, and carries its config inline under `environment:` so there's no separate `.env` to manage — paste it, edit the placeholder values, deploy.
 
 This requires the image to be published first. The included GitHub Action (`.github/workflows/docker-publish.yml`) builds and pushes it to `ghcr.io/<owner>/netmon` on every push (and on `v*` tags). After the first run, set the GHCR package to **Public** so your NAS can pull it without logging in.
