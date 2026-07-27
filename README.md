@@ -103,7 +103,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 Then:
 
 ```bash
-git clone https://github.com/Role1776/netmon.git
+git clone https://github.com/VincentFlagg/netmon.git
 cd netmon
 uv sync
 ```
@@ -193,7 +193,7 @@ For a NAS, use the ready-made `docker-compose.nas.yml` variant instead — it sw
 
 ```bash
 # in your stack manager's stacks dir, e.g. /opt/stacks or /volume1/docker/stacks
-git clone -b claude/docker-build-web-page-6k3od3 https://github.com/VincentFlagg/netmon.git netmon
+git clone https://github.com/VincentFlagg/netmon.git netmon
 cd netmon && cp .env.example .env   # then edit .env
 docker compose -f docker-compose.nas.yml up -d --build
 ```
