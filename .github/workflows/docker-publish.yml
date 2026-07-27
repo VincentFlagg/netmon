@@ -40,6 +40,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Read the release version straight from pyproject.toml so a push to the
+      # default branch publishes matching version tags — no git tag needed
+      # (handy when the environment can't push tag refs). Pushing a v* git tag
+      # still works too, via the type=semver rules below.
+      - name: Read project version
+        id: ver
+        run: |
+          V="$(grep -m1 '^version' pyproject.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          echo "full=$V" >> "$GITHUB_OUTPUT"
+          echo "minor=${V%.*}" >> "$GITHUB_OUTPUT"
+          echo "major=${V%%.*}" >> "$GITHUB_OUTPUT"
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -48,6 +60,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.ver.outputs.full }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.ver.outputs.minor }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.ver.outputs.major }},enable={{is_default_branch}}
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

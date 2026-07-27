@@ -205,7 +205,7 @@ In an image-based stack (e.g. `dockge-stack.yml`), pin a version to control upgr
     image: ghcr.io/vincentflagg/netmon:1.0.0   # instead of :latest
 ```
 
-See **[CHANGELOG.md](CHANGELOG.md)** for what changed in each version. To publish a new version, push a `v*` git tag (e.g. `git tag v1.1.0 && git push origin v1.1.0`) — the GitHub Action builds and tags the image to match.
+See **[CHANGELOG.md](CHANGELOG.md)** for what changed in each version. To publish a new version: bump `version` in `pyproject.toml` (and `uv.lock`), add a CHANGELOG entry, and push to `main` — the GitHub Action reads that version and tags the image `X.Y.Z` / `X.Y` / `X` / `latest` to match. (Pushing a `v*` git tag also triggers a matching build.)
 
 ### NAS deployment (Dockge / Portainer / Container Manager)
 
