@@ -228,6 +228,25 @@ class DB:
 
         return metrics, device_counts
 
+    def get_device_history(self, hours: int = 24) -> list[tuple[datetime, list[str], list[float]]]:
+        # Every device scan in the window, newest first, so the dashboard can
+        # build a per-device "last seen" view. device_scans has no timestamp of
+        # its own, so the scan time comes from the joined metric.
+        hours = max(1, int(hours))
+        rows = self._fetchall("""
+            SELECT m.timestamp, ds.ips, ds.latencies
+            FROM device_scans ds
+            JOIN speedtest st ON st.device_scans_id = ds.id
+            JOIN metrics m ON m.id = st.metrics_id
+            WHERE m.timestamp > DATETIME('now', ?)
+            ORDER BY m.timestamp DESC;
+        """, (f"-{hours} hours",))
+
+        out: list[tuple[datetime, list[str], list[float]]] = []
+        for ts, ips, latencies in rows:
+            out.append((datetime.fromisoformat(ts), json.loads(ips), json.loads(latencies)))
+        return out
+
     def close(self):
         with self._lock:
             self.conn.close()

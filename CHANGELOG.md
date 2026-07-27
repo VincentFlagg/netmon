@@ -14,6 +14,18 @@ control when you upgrade; see the [README](README.md#docker).
 
 _Nothing yet._
 
+## [1.1.0] - 2026-07-27
+
+### Added
+- **Redesigned dashboard** — a full-width ISP banner on top, the stat cards
+  (download / upload / ping / devices) in a column beside the 24-hour graph.
+- **Device list** — clicking the Devices card opens a modal listing the devices
+  discovered over the last 24 hours: online/offline status, IP, best-effort
+  hostname (reverse DNS), latency, and when each was last seen.
+- **Full history page** — the dashboard table now shows the latest 10
+  measurements with a "View all" link to a dedicated `/history` page
+  (up to 500 rows).
+
 ## [1.0.0] - 2026-07-27
 
 First tagged release: netmon can now run as a container with a web dashboard and
@@ -59,5 +71,6 @@ report engine.
   line, so generated graphs are correctly ignored.
 - README clone URLs now point at this repository.
 
-[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/VincentFlagg/netmon/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/VincentFlagg/netmon/releases/tag/v1.0.0
