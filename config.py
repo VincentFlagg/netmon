@@ -22,6 +22,7 @@ class Config:
         web_enabled: bool = True,
         web_host: str = "0.0.0.0",
         web_port: int = 8080,
+        ai_enabled: bool = True,
     ):
         self.ai_api_key: str = ai_api_key
         self.db_path: str = db_path
@@ -35,6 +36,7 @@ class Config:
         self.web_enabled: bool = web_enabled
         self.web_host: str = web_host
         self.web_port: int = web_port
+        self.ai_enabled: bool = ai_enabled
 
     @staticmethod
     def _parse_args():
@@ -58,17 +60,23 @@ class Config:
         base_url = os.getenv("AI_BASE_URL", "")
         notifier = os.getenv("NOTIFIER", "telegram").strip().lower()
 
-        if ai_key.strip() == "":
-            raise RuntimeError("AI_API_KEY not found or empty in environment")
         if db_path.strip() == "":
             raise RuntimeError("DB_PATH not found or empty in environment")
-        if model.strip() == "":
-            raise RuntimeError("MODEL not found or empty in environment")
-        if base_url.strip() == "":
-            raise RuntimeError("BASE_URL not found or empty in environment")
 
-        if notifier not in ("telegram", "discord"):
-            raise RuntimeError(f"NOTIFIER must be 'telegram' or 'discord', got: {notifier!r}")
+        # AI is optional and all-or-nothing: provide all three AI_* values to
+        # enable sarcastic 4-hour reports, or leave them all empty to run
+        # without AI commentary (the dashboard and status updates still work).
+        ai_fields = {"AI_API_KEY": ai_key, "AI_MODEL": model, "AI_BASE_URL": base_url}
+        ai_set = [name for name, val in ai_fields.items() if val.strip() != ""]
+        if ai_set and len(ai_set) != 3:
+            missing = [name for name in ai_fields if name not in ai_set]
+            raise RuntimeError(
+                "AI is partially configured. Set all of AI_API_KEY, AI_MODEL and "
+                f"AI_BASE_URL, or none of them. Missing: {', '.join(missing)}"
+            )
+
+        if notifier not in ("telegram", "discord", "none"):
+            raise RuntimeError(f"NOTIFIER must be 'telegram', 'discord' or 'none', got: {notifier!r}")
 
         tg_bot_token = os.getenv("TG_BOT_TOKEN", "")
         tg_chat_id = os.getenv("TG_CHAT_ID", "")
@@ -92,13 +100,21 @@ class Config:
                 raise RuntimeError("TG_BOT_TOKEN not found or empty in environment")
             if tg_chat_id.strip() == "":
                 raise RuntimeError("TG_CHAT_ID not found or empty in environment")
-        else:
+        elif notifier == "discord":
             if discord_webhook_url.strip() == "":
                 raise RuntimeError("DISCORD_WEBHOOK_URL not found or empty in environment")
+        # notifier == "none": dashboard-only, no notifier credentials needed.
+
+        if notifier == "none" and web_enabled is False:
+            raise RuntimeError(
+                "NOTIFIER=none with WEB_ENABLED=false leaves no way to see any "
+                "output. Enable the web dashboard or pick a notifier."
+            )
 
         return cls(
             ai_key, db_path, model, base_url, notifier,
             tg_bot_token, tg_chat_id, discord_webhook_url,
             request_timeout,
             web_enabled, web_host, web_port,
+            ai_enabled=len(ai_set) == 3,
         )

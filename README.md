@@ -122,14 +122,14 @@ cp .env.example .env
 
 | Variable | Description |
 | :--- | :--- |
-| `AI_API_KEY` | Your LLM provider API key (any string works for most local servers) |
-| `AI_MODEL` | Model name (e.g. `gpt-4o-mini`, or a local model name — see below) |
-| `AI_BASE_URL` | Base API URL (e.g., `https://api.openai.com/v1`, or your local server's URL) |
-| `NOTIFIER` | `telegram` (default) or `discord` — picks which service receives alerts |
+| `AI_API_KEY` | *Optional (all-or-nothing).* Your LLM provider API key (any string works for most local servers) |
+| `AI_MODEL` | *Optional.* Model name (e.g. `gpt-4o-mini`, or a local model name — see below) |
+| `AI_BASE_URL` | *Optional.* Base API URL (e.g., `https://api.openai.com/v1`, or your local server's URL) |
+| `NOTIFIER` | `telegram` (default), `discord`, or `none` (dashboard-only — see below) |
 | `TG_BOT_TOKEN` | Telegram bot token from `@BotFather` — required if `NOTIFIER=telegram` |
 | `TG_CHAT_ID` | Your Telegram Chat ID — required if `NOTIFIER=telegram` |
 | `DISCORD_WEBHOOK_URL` | Discord channel webhook URL — required if `NOTIFIER=discord` |
-| `DB_PATH` | SQLite database file path (e.g. `metrics.sql`) |
+| `DB_PATH` | **Required.** SQLite database file path (e.g. `metrics.sql`) |
 | `REQUEST_TIMEOUT` | *Optional.* HTTP timeout in seconds for Telegram/Discord requests (positive integer, default `30`) |
 | `WEB_ENABLED` | *Optional.* Serve the web dashboard (`true`/`false`, default `true`) |
 | `WEB_HOST` | *Optional.* Dashboard bind address (default `0.0.0.0`; use `127.0.0.1` for localhost-only) |
@@ -215,9 +215,13 @@ Because the container already runs as root, the passwordless-`sudo` setup from t
 
 ---
 
-## Notifications: Telegram or Discord
+## Notifications: Telegram, Discord, or none
 
-netmon supports two notification backends, selected via the `NOTIFIER` variable in `.env`. Only one is needed.
+netmon supports two notification backends, selected via the `NOTIFIER` variable in `.env`. Only one is needed — or you can turn notifications off entirely.
+
+### No notifier (dashboard-only)
+
+Don't want Telegram *or* Discord? Set `NOTIFIER=none`. netmon still runs its speed tests and LAN scans on schedule and stores everything, but pushes nothing out — you read the results on the [web dashboard](#web-dashboard) instead. In this mode you don't need any `TG_*` / `DISCORD_*` values, and the AI variables are optional too (leave all three `AI_*` empty to skip the AI commentary). `NOTIFIER=none` requires `WEB_ENABLED=true` (otherwise there'd be no output at all).
 
 ### Telegram (default)
 

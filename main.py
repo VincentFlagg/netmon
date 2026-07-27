@@ -9,8 +9,9 @@ import discord_hook
 import time
 import runner
 import webapp
+from contextlib import ExitStack
 from service import Monitor
-from notifier import Notifier
+from notifier import Notifier, NullNotifier
 
 SLEEP_TIME = 1800
 
@@ -39,14 +40,23 @@ def main():
     t: Notifier
     if conf.notifier == "discord":
         t = discord_hook.Bot.init(conf.discord_webhook_url, conf.request_timeout)
-    else:
+    elif conf.notifier == "telegram":
         t = tg.Bot.init(conf.tg_bot_token, conf.tg_chat_id, conf.request_timeout)
+    else:  # "none" — dashboard-only, nothing is pushed out
+        t = NullNotifier()
     r = runner.Runner()
 
-    with (
-        sqlite.DB.init(conf.db_path) as database,
-        ai.Client.init(conf.ai_api_key, conf.model, conf.base_url) as netmon_ai,
-    ):
+    with ExitStack() as stack:
+        database = stack.enter_context(sqlite.DB.init(conf.db_path))
+
+        netmon_ai = None
+        if conf.ai_enabled:
+            netmon_ai = stack.enter_context(
+                ai.Client.init(conf.ai_api_key, conf.model, conf.base_url)
+            )
+        else:
+            log.info("AI is not configured — reports will be sent without commentary.")
+
         monitor = Monitor(database, t, netmon_ai, r)
 
         if conf.web_enabled:

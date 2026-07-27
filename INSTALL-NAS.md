@@ -23,9 +23,13 @@ Before you start, make sure you have:
    - **Telegram:** a bot token (from [@BotFather](https://t.me/botfather)) and
      your numeric chat ID, **or**
    - **Discord:** a channel webhook URL
-     (Server Settings → Integrations → Webhooks → New Webhook → Copy URL).
-3. **An AI endpoint** — an API key for any OpenAI-compatible service
+     (Server Settings → Integrations → Webhooks → New Webhook → Copy URL), **or**
+   - **Nothing** — set `NOTIFIER: "none"` to skip Telegram/Discord entirely and
+     just use the web dashboard (see
+     [Don't want Telegram or Discord?](#dont-want-telegram-or-discord) below).
+3. **An AI endpoint** *(optional)* — an API key for any OpenAI-compatible service
    (e.g. OpenAI `gpt-4o-mini`), *or* a local LLM server URL (Ollama, LM Studio).
+   Leave the `AI_*` values empty to run without the sarcastic AI commentary.
    See the [main README](README.md#4-configure-env) for how to get each of these.
 
 ---
@@ -123,6 +127,25 @@ In the pasted YAML, replace the placeholders under `environment:`:
 
 Leave `DB_PATH`, `WEB_HOST`, the `volumes:`, `network_mode:` and `cap_add:`
 sections as they are.
+
+### Don't want Telegram or Discord?
+
+Set the notifier to `none` and delete the notifier/AI lines. netmon still runs
+its speed tests and LAN scans and stores everything — you just read the results
+on the dashboard instead of getting pushed messages. A minimal `environment:`
+block for dashboard-only mode looks like this:
+
+```yaml
+    environment:
+      NOTIFIER: "none"
+      DB_PATH: "/data/metrics.sql"
+      WEB_HOST: "0.0.0.0"
+      WEB_PORT: "8080"
+```
+
+No `AI_*`, no `TG_*`, no `DISCORD_*` needed. (You can still add the `AI_*` values
+if you want the AI report text on the graph you'd get every 4 hours — but with
+`none` there's nowhere to send it, so most people leave them out.)
 
 ---
 

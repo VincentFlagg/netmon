@@ -155,11 +155,12 @@ class Monitor:
         self,
         db: sqlite.DB,
         notifier: Notifier,
-        netmon_ai: ai.Client,
+        netmon_ai: ai.Client | None,
         r: runner.Runner,
     ):
         self.db = db
         self.notifier = notifier
+        # None when AI is not configured — reports are then sent graph-only.
         self.ai = netmon_ai
         self.runner = r
 
@@ -243,19 +244,26 @@ class Monitor:
         user_message = self._build_report_user_message(metrics, device_counts)
 
         self.notifier.send_chat_action(ChatAction.TYPING)
-        try:
-            report = self.ai.send_message(user_message, REPORT_SYSTEM_PROMPT)
-            report = report.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
-        except Exception as e:
-            # AI backend down/unreachable/misconfigured: don't lose the whole
-            # report, just send the graph with a plain notice instead of a
-            # sarcastic AI-written one.
-            log.error(f"AI report generation failed, sending graph without commentary: {e}")
+        if self.ai is None:
+            # AI intentionally not configured: send the graph with a plain header.
             report = (
                 "<b>Network Speed Test Report (24h Analysis)</b>\n\n"
-                "<i>AI commentary unavailable this cycle — the AI backend "
-                "could not be reached. Raw graph data is attached below.</i>"
+                "<i>AI commentary is disabled. Raw graph data is attached below.</i>"
             )
+        else:
+            try:
+                report = self.ai.send_message(user_message, REPORT_SYSTEM_PROMPT)
+                report = report.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+            except Exception as e:
+                # AI backend down/unreachable/misconfigured: don't lose the whole
+                # report, just send the graph with a plain notice instead of a
+                # sarcastic AI-written one.
+                log.error(f"AI report generation failed, sending graph without commentary: {e}")
+                report = (
+                    "<b>Network Speed Test Report (24h Analysis)</b>\n\n"
+                    "<i>AI commentary unavailable this cycle — the AI backend "
+                    "could not be reached. Raw graph data is attached below.</i>"
+                )
 
         self.notifier.send_chat_action(ChatAction.UPLOAD_PHOTO)
         with self._graph_lock:
