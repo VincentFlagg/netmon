@@ -1,9 +1,12 @@
 import html
+import logging
 import re
 
 import requests
 
 from notifier import ChatAction
+
+log = logging.getLogger("netmon")
 
 # ntfy notifications are plain text, so strip the Telegram-HTML tags the reports
 # are written in but keep their inner text (e.g. "<b>148 Mbps</b>" -> "148 Mbps").
@@ -65,18 +68,30 @@ class Bot:
         # request (HTTP headers can't hold newlines), so send the report text
         # first, then upload the graph as an attachment.
         if caption.strip():
-            self.send_message(caption)
+            self.send_message(caption)  # the important part; raises if it fails
 
-        response = requests.put(
-            self.url,
-            data=photo,
-            headers=self._headers({"Filename": "graph.png", "Message": "24-hour network graph"}),
-            auth=self._basic_auth,
-            timeout=self.timeout,
-        )
-        if response.status_code != 200:
-            raise RuntimeError(f"Failed to send photo: {response.text}")
-        return response.text
+        # The graph attachment is best-effort. Many self-hosted ntfy servers
+        # disable attachments (they're off unless attachment-cache-dir is set),
+        # so a rejection here must NOT fail the whole report — the text is
+        # already delivered. Log a hint and carry on.
+        try:
+            response = requests.put(
+                self.url,
+                data=photo,
+                headers=self._headers({"Filename": "graph.png", "Message": "24-hour network graph"}),
+                auth=self._basic_auth,
+                timeout=self.timeout,
+            )
+            if response.status_code != 200:
+                log.warning(
+                    "ntfy did not accept the graph attachment (%s: %s). The report text "
+                    "was still delivered; enable attachments on your ntfy server "
+                    "(attachment-cache-dir + base-url) to include the graph image.",
+                    response.status_code, response.text.strip(),
+                )
+        except Exception as e:
+            log.warning(f"ntfy graph attachment upload failed ({e}); report text was still delivered.")
+        return ""
 
     def send_chat_action(self, action: ChatAction = ChatAction.TYPING) -> str:
         # ntfy has no typing-indicator concept — no-op.

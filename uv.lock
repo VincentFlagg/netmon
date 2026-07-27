@@ -407,7 +407,7 @@ wheels = [
 
 [[package]]
 name = "netmon"
-version = "1.2.0"
+version = "1.2.1"
 source = { virtual = "." }
 dependencies = [
     { name = "matplotlib" },

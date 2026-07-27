@@ -14,6 +14,14 @@ control when you upgrade; see the [README](README.md#docker).
 
 _Nothing yet._
 
+## [1.2.1] - 2026-07-27
+
+### Fixed
+- ntfy: a rejected graph attachment (e.g. `attachments not allowed` on a
+  self-hosted server with attachments disabled) no longer fails the whole
+  report. The report text is sent first and always delivered; the graph upload
+  is best-effort and, if refused, logs a hint instead of raising.
+
 ## [1.2.0] - 2026-07-27
 
 ### Added
@@ -90,7 +98,8 @@ report engine.
   line, so generated graphs are correctly ignored.
 - README clone URLs now point at this repository.
 
-[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/VincentFlagg/netmon/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/VincentFlagg/netmon/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/VincentFlagg/netmon/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/VincentFlagg/netmon/releases/tag/v1.0.0
