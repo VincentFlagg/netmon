@@ -130,7 +130,8 @@ cp .env.example .env
 | `TG_CHAT_ID` | Your Telegram Chat ID — required if `NOTIFIER=telegram` |
 | `DISCORD_WEBHOOK_URL` | Discord channel webhook URL — required if `NOTIFIER=discord` |
 | `NTFY_URL` | Full ntfy topic URL (e.g. `https://ntfy.sh/my-topic`) — required if `NOTIFIER=ntfy` |
-| `NTFY_TOKEN` | *Optional.* ntfy bearer access token, only for protected topics |
+| `NTFY_TOKEN` | *Optional.* ntfy bearer access token for protected topics |
+| `NTFY_USER` / `NTFY_PASSWORD` | *Optional.* ntfy username + password (HTTP Basic auth) — an alternative to `NTFY_TOKEN` |
 | `DB_PATH` | **Required.** SQLite database file path (e.g. `metrics.sql`) |
 | `REQUEST_TIMEOUT` | *Optional.* HTTP timeout in seconds for Telegram/Discord requests (positive integer, default `30`) |
 | `WEB_ENABLED` | *Optional.* Serve the web dashboard (`true`/`false`, default `true`) |
@@ -234,10 +235,15 @@ Don't want any push service? Set `NOTIFIER=none`. netmon still runs its speed te
    ```
    NOTIFIER=ntfy
    NTFY_URL=https://ntfy.sh/my-netmon-a8f3z2
-   # NTFY_TOKEN=tk_...   # only for protected topics or a self-hosted server that requires auth
    ```
 
-Point `NTFY_URL` at your own server instead (e.g. `https://ntfy.example.com/netmon`) if you self-host. Reports are sent as plain text (the HTML formatting is stripped), and the 4-hour graph arrives as an image attachment.
+**Protected topics** (a reserved topic on ntfy.sh, or a server with auth) need credentials — use *one* of:
+```
+NTFY_TOKEN=tk_...            # a bearer access token, OR
+NTFY_USER=myuser             # username + password (HTTP Basic auth)
+NTFY_PASSWORD=mypassword
+```
+A public/unreserved topic needs no auth at all. Point `NTFY_URL` at your own server instead (e.g. `https://ntfy.example.com/netmon`) if you self-host. Reports are sent as plain text (the HTML formatting is stripped), and the 4-hour graph arrives as an image attachment.
 
 ### Telegram (default)
 

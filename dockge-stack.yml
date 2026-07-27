@@ -45,10 +45,13 @@ services:
       TG_CHAT_ID: "123456789"
       # For Discord instead, set NOTIFIER: "discord" and fill this in:
       # DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/XXX/YYY"
-      # For ntfy instead, set NOTIFIER: "ntfy" and give the full topic URL
-      # (NTFY_TOKEN only needed for protected topics):
+      # For ntfy instead, set NOTIFIER: "ntfy" and give the full topic URL.
+      # Auth is only needed for protected topics — use EITHER a token OR
+      # username/password (a public/unreserved topic needs neither):
       # NTFY_URL: "https://ntfy.sh/your-unique-netmon-topic"
       # NTFY_TOKEN: "tk_xxxxxxxxxxxxxxxx"
+      # NTFY_USER: "myuser"
+      # NTFY_PASSWORD: "mypassword"
 
       # --- Storage & web dashboard ---
       DB_PATH: "/data/metrics.sql"
