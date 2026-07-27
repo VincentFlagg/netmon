@@ -27,6 +27,8 @@ class Config:
         web_host: str = "0.0.0.0",
         web_port: int = 8080,
         ai_enabled: bool = True,
+        admin_user: str = "",
+        admin_password: str = "",
     ):
         self.ai_api_key: str = ai_api_key
         self.db_path: str = db_path
@@ -45,6 +47,13 @@ class Config:
         self.web_host: str = web_host
         self.web_port: int = web_port
         self.ai_enabled: bool = ai_enabled
+        self.admin_user: str = admin_user
+        self.admin_password: str = admin_password
+
+    @property
+    def admin_enabled(self) -> bool:
+        # The admin page is only served when both credentials are configured.
+        return bool(self.admin_user.strip()) and bool(self.admin_password)
 
     @staticmethod
     def _parse_args():
@@ -98,6 +107,9 @@ class Config:
         if request_timeout <= 0:
             raise RuntimeError(f"REQUEST_TIMEOUT must be positive, got: {request_timeout}")
 
+        admin_user = os.getenv("ADMIN_USER", "")
+        admin_password = os.getenv("ADMIN_PASSWORD", "")
+
         web_enabled = os.getenv("WEB_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off")
         web_host = os.getenv("WEB_HOST", "0.0.0.0").strip() or "0.0.0.0"
         try:
@@ -139,4 +151,5 @@ class Config:
             request_timeout,
             web_enabled, web_host, web_port,
             ai_enabled=len(ai_set) == 3,
+            admin_user=admin_user, admin_password=admin_password,
         )

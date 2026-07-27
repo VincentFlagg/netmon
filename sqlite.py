@@ -79,6 +79,15 @@ class DB:
             );
         """)
 
+        # Runtime settings (admin page) and small bits of cached state, stored
+        # as JSON strings keyed by name.
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+        """)
+
     @contextmanager
     def transaction(self):
         depth = _tx_depth.get()
@@ -246,6 +255,40 @@ class DB:
         for ts, ips, latencies in rows:
             out.append((datetime.fromisoformat(ts), json.loads(ips), json.loads(latencies)))
         return out
+
+    # ------------------------------------------------------------------ #
+    # Settings & cached state (key/value JSON)
+    # ------------------------------------------------------------------ #
+    def get_all_settings(self) -> dict:
+        rows = self._fetchall("SELECT key, value FROM settings;")
+        out = {}
+        for key, value in rows:
+            try:
+                out[key] = json.loads(value)
+            except (ValueError, TypeError):
+                pass
+        return out
+
+    def set_settings(self, items: dict):
+        with self.transaction():
+            for key, value in items.items():
+                self.conn.execute(
+                    "INSERT INTO settings (key, value) VALUES (?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
+                    (key, json.dumps(value)),
+                )
+
+    def set_last_report(self, html: str, timestamp_iso: str):
+        self.set_settings({"_last_report_html": html, "_last_report_time": timestamp_iso})
+
+    def get_last_report(self) -> tuple[str, str] | None:
+        rows = self._fetchall(
+            "SELECT key, value FROM settings WHERE key IN ('_last_report_html', '_last_report_time');"
+        )
+        data = {k: json.loads(v) for k, v in rows}
+        if "_last_report_html" not in data:
+            return None
+        return data["_last_report_html"], data.get("_last_report_time", "")
 
     def close(self):
         with self._lock:

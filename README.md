@@ -137,6 +137,7 @@ cp .env.example .env
 | `WEB_ENABLED` | *Optional.* Serve the web dashboard (`true`/`false`, default `true`) |
 | `WEB_HOST` | *Optional.* Dashboard bind address (default `0.0.0.0`; use `127.0.0.1` for localhost-only) |
 | `WEB_PORT` | *Optional.* Dashboard port (default `8080`) |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | *Optional.* Set both to enable the authenticated `/admin` page (schedule, templates, AI prompt). Unset = admin disabled |
 
 > [!TIP]
 > **You're not locked into OpenAI.** `ai.py` talks to any OpenAI-compatible endpoint, so a local inference server (e.g. [Ollama](https://ollama.com), LM Studio) works too — just point `AI_BASE_URL` at it. For report quality that holds up, use a model with **at least ~7B parameters**; a solid local pick is **Gemma 4 12B at 4-bit (QAT) quantization** (`gemma4:12b-it-qat` via Ollama), which fits comfortably on 16GB of RAM.
@@ -193,12 +194,27 @@ The dashboard shows:
 * **Device list** — click the Devices card to see the devices discovered over the last 24 hours: online/offline, IP, hostname (best-effort reverse DNS), latency, and when each was last seen.
 * **History** — the latest 10 measurements, with a **View all** link to a full `/history` page.
 * **Run speed test now** — a button that triggers an immediate measurement on demand (it stores the result and sends a mini report, without disturbing the scheduled 4-hour detailed-report cadence).
+* **Run AI report now** *(when AI is configured)* — generate and send a detailed AI report on demand; the latest report is also shown on the dashboard.
 * **Download CSV** — export the recent metrics as a spreadsheet-friendly file.
 
 The page auto-refreshes every 30 seconds. Configure it with `WEB_ENABLED`, `WEB_HOST`, and `WEB_PORT` (see the `.env` table above), or set `WEB_ENABLED=false` to turn it off entirely.
 
 > [!WARNING]
-> The dashboard has **no authentication** and exposes a button that triggers speed tests plus a data export. Keep it on a trusted LAN. To restrict it to the local machine, set `WEB_HOST=127.0.0.1`; to expose it more widely, put it behind a reverse proxy that adds authentication.
+> The dashboard has **no authentication** and exposes a button that triggers speed tests plus a data export. Keep it on a trusted LAN. To restrict it to the local machine, set `WEB_HOST=127.0.0.1`; to expose it more widely, put it behind a reverse proxy that adds authentication. (The **admin page** below is separately password-protected.)
+
+### Admin page
+
+Set `ADMIN_USER` and `ADMIN_PASSWORD` to enable an authenticated **`/admin`** page (an `⚙ Admin` link appears on the dashboard). It's protected by HTTP Basic auth and lets you change, without restarting the container:
+
+* **Schedule** — the interval between runs, and an optional active window (only run during certain **hours** and **days**).
+* **Report frequency** — how many runs between detailed AI reports.
+* **Status message** — the wording/format of the per-run update (with placeholders like `{download:.1f}`, `{device_count}`, `{status_text}`).
+* **AI behaviour** — the system prompt that shapes the AI report (tone, structure, length).
+
+Settings are stored in the database (on your volume), so they survive restarts and image updates. Changes take effect on the next run. If `ADMIN_USER`/`ADMIN_PASSWORD` are unset, the admin page is disabled entirely.
+
+> [!WARNING]
+> The admin page changes how netmon behaves, so protect it: use a strong `ADMIN_PASSWORD`, and since Basic-auth credentials cross the network in the clear over plain HTTP, keep it on a trusted LAN or behind an HTTPS reverse proxy.
 
 ---
 
@@ -457,7 +473,9 @@ netmon/
 ├── graphs/                        # Generated 24h matplotlib graph images
 ├── main.py                        # Entry point: wires everything & runs the scheduler loop
 ├── service.py                     # Monitor: one measurement cycle, shared by loop & web
-├── webapp.py                      # Standard-library web dashboard (HTTP server + UI)
+├── settings.py                    # Runtime-editable settings (admin page), DB-backed
+├── templates.py                   # Default message templates & AI system prompt
+├── webapp.py                      # Standard-library web dashboard + admin page
 ├── runner.py                      # Speedtest-cli and nmap scan execution & parsing
 ├── sqlite.py                      # SQLite database operations & schema management
 ├── models.py                      # Domain data models (NetworkMetric, SpeedTest)

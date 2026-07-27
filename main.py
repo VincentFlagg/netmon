@@ -14,8 +14,6 @@ from contextlib import ExitStack
 from service import Monitor
 from notifier import Notifier, NullNotifier
 
-SLEEP_TIME = 1800
-
 log = logging.getLogger("netmon")
 
 
@@ -67,13 +65,16 @@ def main():
 
         if conf.web_enabled:
             webapp.start_web_server(
-                database, monitor, conf.web_host, conf.web_port, conf.notifier
+                database, monitor, conf.web_host, conf.web_port, conf.notifier,
+                admin_user=conf.admin_user, admin_password=conf.admin_password,
+                ai_enabled=conf.ai_enabled,
             )
 
         log.info("The bot has been started.")
         while True:
             monitor.run_scheduled_cycle()
-            time.sleep(SLEEP_TIME)
+            # Interval is admin-editable, so read it fresh each loop.
+            time.sleep(monitor.settings.interval_seconds)
 
 
 if __name__ == "__main__":
