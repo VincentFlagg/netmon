@@ -278,21 +278,33 @@ class Monitor:
     # ------------------------------------------------------------------ #
     def run_scheduled_cycle(self):
         """One tick of the background scheduler. Sends a detailed AI report
-        every REPORT_EVERY cycles, otherwise a mini status update."""
+        every REPORT_EVERY cycles, otherwise a mini status update.
+
+        This never raises: a failure in one cycle (speed test, DB, or notifier)
+        is logged and the loop simply tries again at the next interval. Crashing
+        here would, under a Docker ``restart`` policy, restart the container and
+        immediately run another speed test — turning a misconfigured notifier
+        into a speed-test-every-few-seconds storm."""
         with self._run_lock:
             self.state.running = True
             try:
                 metric, devices = self._measure_and_store()
-                if self.counter >= REPORT_EVERY:
+
+                # Advance the report cadence up front so that a notifier failure
+                # can't wedge us into retrying the detailed report every cycle.
+                send_detailed = self.counter >= REPORT_EVERY
+                self.counter = 0 if send_detailed else self.counter + 1
+
+                if send_detailed:
                     self._send_detailed_report()
-                    self.counter = 0
                 else:
                     self._send_mini_report(metric, devices)
-                self.counter += 1
                 self.state.last_error = None
             except Exception as e:
+                # Measurement is already stored if we got that far, so the
+                # dashboard still updates; just record the error and move on.
+                log.error(f"Scheduled cycle failed (will retry next interval): {e}")
                 self.state.last_error = str(e)
-                raise
             finally:
                 self.state.running = False
                 self.state.next_report_in = max(0, REPORT_EVERY - self.counter)
