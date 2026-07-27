@@ -31,12 +31,15 @@ services:
       - NET_ADMIN
 
     environment:
-      # --- AI (any OpenAI-compatible endpoint) ---
+      # --- AI (any OpenAI-compatible endpoint) — OPTIONAL, all-or-nothing ---
+      # Delete all three AI_* lines to run without the sarcastic AI commentary.
       AI_API_KEY: "sk-REPLACE_ME"
       AI_MODEL: "gpt-4o-mini"
       AI_BASE_URL: "https://api.openai.com/v1"
 
-      # --- Notifier: "telegram" (default) or "discord" ---
+      # --- Notifier: "telegram" (default), "discord", or "none" ---
+      # NOTIFIER: "none"  -> dashboard-only; delete the TG_*/DISCORD_* lines and
+      #                      just use http://<nas-ip>:8080 (needs the web on).
       NOTIFIER: "telegram"
       TG_BOT_TOKEN: "123456:AA_REPLACE_ME"
       TG_CHAT_ID: "123456789"
