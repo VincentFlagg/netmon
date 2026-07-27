@@ -125,10 +125,12 @@ cp .env.example .env
 | `AI_API_KEY` | *Optional (all-or-nothing).* Your LLM provider API key (any string works for most local servers) |
 | `AI_MODEL` | *Optional.* Model name (e.g. `gpt-4o-mini`, or a local model name — see below) |
 | `AI_BASE_URL` | *Optional.* Base API URL (e.g., `https://api.openai.com/v1`, or your local server's URL) |
-| `NOTIFIER` | `telegram` (default), `discord`, or `none` (dashboard-only — see below) |
+| `NOTIFIER` | `telegram` (default), `discord`, `ntfy`, or `none` (dashboard-only — see below) |
 | `TG_BOT_TOKEN` | Telegram bot token from `@BotFather` — required if `NOTIFIER=telegram` |
 | `TG_CHAT_ID` | Your Telegram Chat ID — required if `NOTIFIER=telegram` |
 | `DISCORD_WEBHOOK_URL` | Discord channel webhook URL — required if `NOTIFIER=discord` |
+| `NTFY_URL` | Full ntfy topic URL (e.g. `https://ntfy.sh/my-topic`) — required if `NOTIFIER=ntfy` |
+| `NTFY_TOKEN` | *Optional.* ntfy bearer access token, only for protected topics |
 | `DB_PATH` | **Required.** SQLite database file path (e.g. `metrics.sql`) |
 | `REQUEST_TIMEOUT` | *Optional.* HTTP timeout in seconds for Telegram/Discord requests (positive integer, default `30`) |
 | `WEB_ENABLED` | *Optional.* Serve the web dashboard (`true`/`false`, default `true`) |
@@ -215,13 +217,32 @@ Because the container already runs as root, the passwordless-`sudo` setup from t
 
 ---
 
-## Notifications: Telegram, Discord, or none
+## Notifications: Telegram, Discord, ntfy, or none
 
-netmon supports two notification backends, selected via the `NOTIFIER` variable in `.env`. Only one is needed — or you can turn notifications off entirely.
+netmon supports three notification backends, selected via the `NOTIFIER` variable in `.env`. Only one is needed — or you can turn notifications off entirely.
 
 ### No notifier (dashboard-only)
 
-Don't want Telegram *or* Discord? Set `NOTIFIER=none`. netmon still runs its speed tests and LAN scans on schedule and stores everything, but pushes nothing out — you read the results on the [web dashboard](#web-dashboard) instead. In this mode you don't need any `TG_*` / `DISCORD_*` values, and the AI variables are optional too (leave all three `AI_*` empty to skip the AI commentary). `NOTIFIER=none` requires `WEB_ENABLED=true` (otherwise there'd be no output at all).
+Don't want any push service? Set `NOTIFIER=none`. netmon still runs its speed tests and LAN scans on schedule and stores everything, but pushes nothing out — you read the results on the [web dashboard](#web-dashboard) instead. In this mode you don't need any notifier values, and the AI variables are optional too (leave all three `AI_*` empty to skip the AI commentary). `NOTIFIER=none` requires `WEB_ENABLED=true` (otherwise there'd be no output at all).
+
+### ntfy
+
+[ntfy](https://ntfy.sh) is a dead-simple pub-sub push service — great for a NAS, and self-hostable. There's no bot or webhook setup: just pick a hard-to-guess topic name.
+
+1. Install the ntfy app (Android/iOS) or open the web app, and **subscribe to a topic** — any unique name, e.g. `my-netmon-a8f3z2`.
+2. In `.env`:
+   ```
+   NOTIFIER=ntfy
+   NTFY_URL=https://ntfy.sh/my-netmon-a8f3z2
+   # NTFY_TOKEN=tk_...   # only for protected topics or a self-hosted server that requires auth
+   ```
+
+Point `NTFY_URL` at your own server instead (e.g. `https://ntfy.example.com/netmon`) if you self-host. Reports are sent as plain text (the HTML formatting is stripped), and the 4-hour graph arrives as an image attachment.
+
+### Telegram (default)
+
+1. Message [`@BotFather`](https://t.me/botfather) on Telegram and send `/newbot`, following the prompts to get a **bot token**.
+2. Get your **Chat ID** — the simplest way is to message your new bot, then visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser and read the `chat.id` field from the JSON response.
 
 ### Telegram (default)
 
@@ -339,6 +360,7 @@ netmon/
 ├── ai.py                          # OpenAI API client & sarcastic text generator
 ├── tg.py                          # Telegram bot dispatch helper
 ├── discord_hook.py                # Discord webhook dispatch helper
+├── ntfy_hook.py                   # ntfy topic dispatch helper
 ├── config.py                      # Environment variable validation & config
 ├── notifier.py                    # Notifier protocol & shared chat-action enum
 ├── Dockerfile                     # Container image (bundles nmap + speedtest-cli)

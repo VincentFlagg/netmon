@@ -6,6 +6,7 @@ import sqlite
 import ai
 import tg
 import discord_hook
+import ntfy_hook
 import time
 import runner
 import webapp
@@ -40,6 +41,8 @@ def main():
     t: Notifier
     if conf.notifier == "discord":
         t = discord_hook.Bot.init(conf.discord_webhook_url, conf.request_timeout)
+    elif conf.notifier == "ntfy":
+        t = ntfy_hook.Bot.init(conf.ntfy_url, conf.ntfy_token, conf.request_timeout)
     elif conf.notifier == "telegram":
         t = tg.Bot.init(conf.tg_bot_token, conf.tg_chat_id, conf.request_timeout)
     else:  # "none" — dashboard-only, nothing is pushed out
