@@ -8,122 +8,11 @@ import graphs
 import models
 import runner
 import sqlite
+import settings as settings_mod
+from templates import REPORT_USER_TEMPLATE, MINI_REPORT_TEMPLATE
 from notifier import ChatAction, Notifier
 
 log = logging.getLogger("netmon")
-
-# How many scheduled cycles between full AI reports. With SLEEP_TIME=1800s
-# (30 min) a report every 8th cycle lands roughly every 4 hours.
-REPORT_EVERY = 8
-
-REPORT_SYSTEM_PROMPT = """
-You are a sarcastic, cynical network analyst bot. Your job is to output a short network speed test and 24-hour trend report in Telegram HTML format.
-You will receive a list of speed tests from the last 24 hours in chronological order (the last line is the latest test).
-
-You must write the report in ENGLISH.
-You must follow the EXACT structure below. Do not deviate from this layout, header naming, or formatting.
-
-EXPECTED STRUCTURE:
-<b>Network Speed Test Report (24h Analysis)</b>
-
-Client: <b>[Client ISP]</b>
-Server: <b>[Server Name]</b>
-
-<b>Latest Test Metrics</b>
-<pre>
-Download: [Download Speed] Mbps
-Upload: [Upload Speed] Mbps
-Ping: [Ping Latency] ms
-Devices Online: [Device Count]
-</pre>
-
-<b>24-Hour Dynamics Analysis</b>
-[Analyze the dynamics, drops, and load of the network over the last 24 hours. Note any major drops in download/upload speeds or ping spikes.
-Also look at how the device count changed over the same period. ONLY claim a link between device count and speed/latency swings if the numbers actually move together (e.g. speed visibly drops in the same window device count rises). If device count swings around while speed/ping stay flat, say plainly that device count does NOT explain it this period, and point at the ISP/line instead. Never invent a correlation that isn't supported by the numbers.
-If ping reads exactly 0.00 ms while download speed is very low (a few Mbps or less), do NOT describe that as a good/perfect ping. That reading means the real ping was too high to register and got floored to zero — call it a red flag, not a strength.
-Use a sarcastic, informal tone when describing speed drops, latency spikes, or a sudden herd of new devices, blaming heavy users/leeches on the network or the ISP (e.g. "a bunch of idiots clogging the bandwidth", "ISP dropping the ball", "mice chewing the optic fiber cables", or "yet another gadget joining the freeloader party") — but only when the data actually supports that story.
-CRITICAL: Do NOT blame server changes for fluctuations. Assume the server choice is optimal and fluctuations reflect real network load, device count, or ISP issues.
-Wrap key numbers in <code> tags, e.g., <code>148.31 Mbps</code>, <code>15.18 ms</code>, or <code>7 devices</code>.]
-
-<b>Data Transfer (Latest Test)</b>
-<pre>
-Downloaded: [Downloaded MB] MB
-Uploaded: [Uploaded MB] MB
-</pre>
-
-<b>Conclusion</b>
-[A sarcastic, witty 1 short sentence summary of the network's overall quality and reliability over the past day.]
-
-
-TEMPLATE EXAMPLE OF THE OUTPUT:
-<b>Network Speed Test Report (24h Analysis)</b>
-
-Client: <b>nameserver</b>
-Server: <b>New York</b>
-
-<b>Latest Test Metrics</b>
-<pre>
-Download: 140.3 Mbps
-Upload: 62.8 Mbps
-Ping: 15.2 ms
-Devices Online: 7
-</pre>
-
-<b>24-Hour Dynamics Analysis</b>
-Over the last 24 hours, the download speed averaged <code>140 Mbps</code>, but we saw a massive drop to <code>20 Mbps</code> at 8:00 PM right as device count jumped from <code>4</code> to <code>11 devices</code>. Clearly, a bunch of idiots decided to stream 4K movies all at once, or the ISP's mice were busy chewing on the fiber line again. Latency remained stable except for a brief spike to <code>95 ms</code> during the speed dip.
-
-<b>Data Transfer (Latest Test)</b>
-<pre>
-Downloaded: 160.0 MB
-Uploaded: 70.0 MB
-</pre>
-
-<b>Conclusion</b>
-Expect periodic speed deaths whenever the local leechers wake up or the ISP fails to maintain their potato infrastructure.
-
-
-CRITICAL RULES:
-1. Do NOT use <br> or <br/> tags. For line breaks, use normal newlines.
-2. The entire report must be in English.
-3. Keep the "24-Hour Dynamics Analysis" to exactly 2-3 short sentences.
-4. Do NOT write any description text below the "Data Transfer (Latest Test)" pre-block.
-5. Keep the "Conclusion" to exactly 1 short sentence.
-6. Highlight all numeric metric values in the text using <code>[Value]</code>.
-7. Do NOT output any markdown blocks like ```html. Output raw HTML tags directly.
-8. Make sure all HTML tags are closed correctly.
-9. Be sarcastic, informal, and funny when describing performance dips or network load.
-10. The entire output MUST be under 800 characters to ensure it easily fits within Telegram limits.
-"""
-
-REPORT_USER_TEMPLATE = """
-Network speed test results:
-- Date: {timestamp}
-- Download: {download:.2f} Mbps
-- Upload: {upload:.2f} Mbps
-- Ping: {ping:.2f} ms
-- Client: {client}
-- Server: {server}
-- Downloaded: {download_mb} MB
-- Uploaded: {upload_mb} MB
-- Share Link: {share}
-- Devices online: {device_count}
-"""
-
-MINI_REPORT_TEMPLATE = """<b>Network Status Update</b>
-Here is the latest snapshot of your internet speed:
-
-Time: <b>{timestamp}</b>
-ISP: <b>{client}</b> | Server: <b>{server}</b>
-
-Devices online: <b>{device_count}</b>
-
-Download: <b>{download:.1f} Mbps</b>
-Upload: <b>{upload:.1f} Mbps</b>
-Latency: <b>{ping:.1f} ms</b>
-
-Traffic used: <b>{download_mb:.1f} MB</b> down / <b>{upload_mb:.1f} MB</b> up
-
-<b>Current status:</b> {status_text}"""
 
 
 def status_text_for(download_bps: float, ping: float) -> str:
@@ -144,7 +33,7 @@ class RunState:
     running: bool = False
     last_run: datetime | None = None
     last_error: str | None = None
-    next_report_in: int = REPORT_EVERY
+    next_report_in: int = settings_mod.DEFAULTS["report_every"]
 
 
 class Monitor:
@@ -163,6 +52,8 @@ class Monitor:
         # None when AI is not configured — reports are then sent graph-only.
         self.ai = netmon_ai
         self.runner = r
+        # Runtime-editable settings (interval, templates, prompt, schedule).
+        self.settings = settings_mod.Settings(db)
 
         self.counter = 0
         # Serialises whole cycles so a manual run can't overlap a scheduled one.
@@ -196,7 +87,7 @@ class Monitor:
     # Reporting
     # ------------------------------------------------------------------ #
     def _send_mini_report(self, metric: models.NetworkMetric, devices: list[models.NetworkDevice]):
-        msg = MINI_REPORT_TEMPLATE.format(
+        ctx = dict(
             timestamp=metric.timestamp.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
             download=metric.download / 10**6,
             upload=metric.upload / 10**6,
@@ -208,6 +99,13 @@ class Monitor:
             upload_mb=metric.bytes_sent / 10**6,
             status_text=status_text_for(metric.download, metric.ping),
         )
+        template = self.settings.mini_report_template
+        try:
+            msg = template.format(**ctx)
+        except (KeyError, IndexError, ValueError) as e:
+            # A bad custom template must not stop notifications — fall back.
+            log.error(f"Custom status template is invalid ({e}); using the default.")
+            msg = MINI_REPORT_TEMPLATE.format(**ctx)
         self.notifier.send_message(msg)
         log.info("Mini report has been sent.")
 
@@ -252,7 +150,7 @@ class Monitor:
             )
         else:
             try:
-                report = self.ai.send_message(user_message, REPORT_SYSTEM_PROMPT)
+                report = self.ai.send_message(user_message, self.settings.report_system_prompt)
                 report = report.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
             except Exception as e:
                 # AI backend down/unreachable/misconfigured: don't lose the whole
@@ -264,6 +162,9 @@ class Monitor:
                     "<i>AI commentary unavailable this cycle — the AI backend "
                     "could not be reached. Raw graph data is attached below.</i>"
                 )
+
+        # Remember the latest report so the dashboard can show it.
+        self.db.set_last_report(report, datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S"))
 
         self.notifier.send_chat_action(ChatAction.UPLOAD_PHOTO)
         with self._graph_lock:
@@ -278,13 +179,23 @@ class Monitor:
     # ------------------------------------------------------------------ #
     def run_scheduled_cycle(self):
         """One tick of the background scheduler. Sends a detailed AI report
-        every REPORT_EVERY cycles, otherwise a mini status update.
+        every ``report_every`` cycles, otherwise a mini status update. Skipped
+        entirely when the current time is outside the configured active window.
 
         This never raises: a failure in one cycle (speed test, DB, or notifier)
         is logged and the loop simply tries again at the next interval. Crashing
         here would, under a Docker ``restart`` policy, restart the container and
         immediately run another speed test — turning a misconfigured notifier
         into a speed-test-every-few-seconds storm."""
+        # Pick up any admin-page changes made since the last cycle.
+        self.settings.reload()
+        report_every = self.settings.report_every
+
+        if not self.settings.within_active_window(datetime.now().astimezone()):
+            log.info("Outside the configured active window — skipping this cycle.")
+            self.state.next_report_in = max(0, report_every - self.counter)
+            return
+
         with self._run_lock:
             self.state.running = True
             try:
@@ -292,7 +203,7 @@ class Monitor:
 
                 # Advance the report cadence up front so that a notifier failure
                 # can't wedge us into retrying the detailed report every cycle.
-                send_detailed = self.counter >= REPORT_EVERY
+                send_detailed = self.counter >= report_every
                 self.counter = 0 if send_detailed else self.counter + 1
 
                 if send_detailed:
@@ -307,7 +218,27 @@ class Monitor:
                 self.state.last_error = str(e)
             finally:
                 self.state.running = False
-                self.state.next_report_in = max(0, REPORT_EVERY - self.counter)
+                self.state.next_report_in = max(0, report_every - self.counter)
+
+    def run_report_now(self) -> bool:
+        """Generate and send a detailed AI report immediately (the dashboard's
+        "Run AI report now" button). Does not touch the scheduled cadence.
+        Returns False if a cycle is already in progress."""
+        if not self._run_lock.acquire(blocking=False):
+            log.info("AI report requested but a cycle is already in progress.")
+            return False
+        try:
+            self.state.running = True
+            self._send_detailed_report()
+            self.state.last_error = None
+            return True
+        except Exception as e:
+            self.state.last_error = str(e)
+            log.error(f"On-demand report failed: {e}")
+            raise
+        finally:
+            self.state.running = False
+            self._run_lock.release()
 
     def run_manual_cycle(self) -> bool:
         """Triggered from the web dashboard. Runs a measurement + mini report

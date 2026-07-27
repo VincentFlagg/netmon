@@ -14,6 +14,25 @@ control when you upgrade; see the [README](README.md#docker).
 
 _Nothing yet._
 
+## [1.2.0] - 2026-07-27
+
+### Added
+- **Admin page** (`/admin`) — an authenticated settings page (enabled by setting
+  `ADMIN_USER` + `ADMIN_PASSWORD`, protected by HTTP Basic auth). Edit, without
+  restarting, and persisted in the database:
+  - **Schedule** — interval between runs, plus an optional active window
+    (hours + days of week) outside which cycles are skipped.
+  - **Report frequency** — runs between detailed AI reports.
+  - **Status message** template (validated placeholders).
+  - **AI system prompt** that shapes the report.
+- **Run AI report now** button on the dashboard, plus a **Latest AI report**
+  panel showing the most recent report text.
+
+### Changed
+- The run interval, report frequency, status template, and AI prompt are now
+  read from settings at runtime instead of being hard-coded.
+- A bad custom status template falls back to the default instead of failing.
+
 ## [1.1.0] - 2026-07-27
 
 ### Added
@@ -71,6 +90,7 @@ report engine.
   line, so generated graphs are correctly ignored.
 - README clone URLs now point at this repository.
 
-[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/VincentFlagg/netmon/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/VincentFlagg/netmon/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/VincentFlagg/netmon/releases/tag/v1.0.0

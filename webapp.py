@@ -1,8 +1,11 @@
+import base64
 import concurrent.futures
 import csv
+import hmac
 import io
 import json
 import logging
+import re
 import socket
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -11,6 +14,13 @@ from urllib.parse import urlparse, parse_qs
 
 import sqlite
 from service import Monitor
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _html_to_text(html: str) -> str:
+    import html as _h
+    return _h.unescape(_TAG_RE.sub("", html)).strip()
 
 log = logging.getLogger("netmon")
 
@@ -187,6 +197,9 @@ _STYLE = """
   .modal-head h3 { margin: 0; font-size: 16px; }
   .modal-head .close { background: none; color: #8b93a7; font-size: 22px; padding: 0 6px; }
   .modal .sub { padding: 6px 20px 0; color: #8b93a7; font-size: 12px; }
+  .report-box { background: #141826; border: 1px solid #232a3d; border-radius: 12px;
+    padding: 16px 18px; white-space: pre-wrap; font-size: 14px; color: #cfd6e6; }
+  header .adminlink { font-size: 13px; margin-left: 14px; }
 """
 
 
@@ -201,7 +214,10 @@ INDEX_HTML = """<!doctype html>
 <body>
 <header>
   <h1>net<span>mon</span></h1>
-  <div class="meta" id="meta">loading…</div>
+  <div>
+    <span class="meta" id="meta">loading…</span>
+    <a class="adminlink" id="adminLink" href="/admin" style="display:none">⚙ Admin</a>
+  </div>
 </header>
 <main>
   <div class="isp">
@@ -218,9 +234,15 @@ INDEX_HTML = """<!doctype html>
 
   <div class="toolbar">
     <button id="runBtn" onclick="runNow()">Run speed test now</button>
+    <button id="aiBtn" onclick="runReport()" style="display:none">Run AI report now</button>
     <a class="btn secondary" href="/export.csv">Download CSV</a>
     <span class="status-pill" id="statusPill"></span>
   </div>
+
+  <section id="reportSection" style="display:none">
+    <h2>Latest AI report <span class="meta" id="reportTime"></span></h2>
+    <div class="report-box" id="reportBox"></div>
+  </section>
 
   <section>
     <h2>Recent history <a href="/history">View all →</a></h2>
@@ -300,9 +322,37 @@ async function refresh() {
         `<td>${r.uploaded_mb}</td><td>${r.server}</td></tr>`).join('');
     }
 
+    document.getElementById('aiBtn').style.display = status.ai_enabled ? '' : 'none';
+    document.getElementById('adminLink').style.display = status.admin_enabled ? '' : 'none';
+
     updateStatus(status);
+    loadReport();
     document.getElementById('graph').src = '/graph.png?t=' + Date.now();
   } catch (e) { console.error(e); }
+}
+
+async function loadReport() {
+  try {
+    const r = await (await fetch('/api/last-report')).json();
+    const sec = document.getElementById('reportSection');
+    if (r.available) {
+      document.getElementById('reportBox').textContent = r.text;
+      document.getElementById('reportTime').textContent = r.time ? ('· ' + r.time) : '';
+      sec.style.display = '';
+    } else {
+      sec.style.display = 'none';
+    }
+  } catch (e) { console.error(e); }
+}
+
+async function runReport() {
+  const btn = document.getElementById('aiBtn'); btn.disabled = true;
+  try { await fetch('/api/run-report', { method: 'POST' }); } catch (e) { console.error(e); }
+  const fast = setInterval(async () => {
+    const s = await (await fetch('/api/status')).json();
+    updateStatus(s);
+    if (!s.running) { clearInterval(fast); btn.disabled = false; refresh(); }
+  }, 2000);
 }
 
 function updateStatus(status) {
@@ -398,7 +448,137 @@ HISTORY_HTML = """<!doctype html>
 </html>""".replace("__STYLE__", _STYLE)
 
 
-def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str):
+ADMIN_HTML = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>netmon · admin</title>
+<style>__STYLE__
+  .form-card { background:#141826; border:1px solid #232a3d; border-radius:12px; padding:18px 20px; margin-bottom:16px; }
+  .form-card h3 { margin:0 0 4px; font-size:15px; }
+  .form-card p.help { margin:0 0 14px; color:#8b93a7; font-size:12px; }
+  label { display:block; font-size:13px; color:#b7bed0; margin:10px 0 4px; }
+  input[type=number], textarea { width:100%; background:#0d1017; color:#e6e8ee; border:1px solid #2a3350;
+    border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; }
+  textarea { min-height:120px; resize:vertical; white-space:pre; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:120px; }
+  .days { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .days label { display:flex; align-items:center; gap:5px; margin:0; background:#0d1017; border:1px solid #2a3350;
+    border-radius:8px; padding:6px 10px; cursor:pointer; }
+  .days input { margin:0; }
+  .err { color:#f0685f; font-size:12px; margin-top:4px; }
+  .saved { color:#3ecf8e; font-size:13px; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<header>
+  <h1>net<span>mon</span> · admin</h1>
+  <div class="meta"><a href="/">← dashboard</a></div>
+</header>
+<main>
+  <div class="form-card">
+    <h3>Schedule</h3>
+    <p class="help">How often netmon measures, and the window it's allowed to run in.</p>
+    <div class="row">
+      <div>
+        <label>Interval between runs (seconds)</label>
+        <input type="number" id="interval_seconds" min="60" max="86400">
+      </div>
+      <div>
+        <label>Detailed AI report every N runs</label>
+        <input type="number" id="report_every" min="1" max="1000">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Active hours — start (0–23)</label>
+        <input type="number" id="active_hours_start" min="0" max="24">
+      </div>
+      <div>
+        <label>Active hours — end (1–24)</label>
+        <input type="number" id="active_hours_end" min="0" max="24">
+      </div>
+    </div>
+    <label>Active days</label>
+    <div class="days" id="days"></div>
+  </div>
+
+  <div class="form-card">
+    <h3>Status message</h3>
+    <p class="help">The short update sent each run. Placeholders:
+      <span class="mono">{timestamp} {client} {server} {device_count} {download} {upload} {ping} {download_mb} {upload_mb} {status_text}</span>.
+      Numeric ones accept format specs, e.g. <span class="mono">{download:.1f}</span>. HTML tags render on Telegram; Discord/ntfy get plain text.</p>
+    <textarea id="mini_report_template"></textarea>
+    <div class="err" id="err_mini_report_template"></div>
+  </div>
+
+  <div class="form-card">
+    <h3>AI behaviour</h3>
+    <p class="help">The system prompt that shapes the 4-hour report — tone, structure, length. Only used when AI is configured.</p>
+    <textarea id="report_system_prompt" style="min-height:220px"></textarea>
+    <div class="err" id="err_report_system_prompt"></div>
+  </div>
+
+  <div class="toolbar">
+    <button id="saveBtn" onclick="save()">Save settings</button>
+    <span class="saved" id="savedMsg"></span>
+  </div>
+</main>
+<footer>netmon · admin</footer>
+<script>
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const NUM = ["interval_seconds","report_every","active_hours_start","active_hours_end"];
+const TXT = ["mini_report_template","report_system_prompt"];
+
+function renderDays(active) {
+  document.getElementById('days').innerHTML = DAYS.map((d,i) =>
+    `<label><input type="checkbox" value="${i}" ${active.includes(i)?'checked':''}> ${d}</label>`).join('');
+}
+
+async function load() {
+  const s = await (await fetch('/api/settings')).json();
+  NUM.forEach(k => document.getElementById(k).value = s[k]);
+  TXT.forEach(k => document.getElementById(k).value = s[k]);
+  renderDays(s.active_days || []);
+}
+
+async function save() {
+  document.querySelectorAll('.err').forEach(e => e.textContent = '');
+  document.getElementById('savedMsg').textContent = '';
+  const payload = {};
+  NUM.forEach(k => payload[k] = parseInt(document.getElementById(k).value, 10));
+  TXT.forEach(k => payload[k] = document.getElementById(k).value);
+  payload.active_days = [...document.querySelectorAll('#days input:checked')].map(c => parseInt(c.value,10));
+
+  const btn = document.getElementById('saveBtn'); btn.disabled = true;
+  try {
+    const res = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      document.getElementById('savedMsg').textContent = 'Saved. Changes apply on the next run.';
+    } else {
+      const errs = data.errors || {};
+      for (const k in errs) {
+        const el = document.getElementById('err_' + k);
+        if (el) el.textContent = errs[k]; else alert(k + ': ' + errs[k]);
+      }
+      if (!Object.keys(errs).length) alert('Save failed');
+    }
+  } catch (e) { alert('Save failed: ' + e); }
+  btn.disabled = false;
+}
+load();
+</script>
+</body>
+</html>""".replace("__STYLE__", _STYLE)
+
+
+def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str,
+                 admin_user: str = "", admin_password: str = "", ai_enabled: bool = False):
+    admin_enabled = bool(admin_user.strip()) and bool(admin_password)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "netmon/1.0"
@@ -420,6 +600,34 @@ def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str):
         def _json(self, obj, code: int = 200):
             self._send(code, json.dumps(obj).encode("utf-8"), "application/json; charset=utf-8")
 
+        def _read_json(self):
+            try:
+                n = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(n) if n else b"{}"
+                return json.loads(raw or b"{}")
+            except Exception:
+                return None
+
+        def _require_admin(self) -> bool:
+            if not admin_enabled:
+                self._send(404, b"admin is disabled (set ADMIN_USER and ADMIN_PASSWORD)",
+                           "text/plain; charset=utf-8")
+                return False
+            hdr = self.headers.get("Authorization", "")
+            ok = False
+            if hdr.startswith("Basic "):
+                try:
+                    raw = base64.b64decode(hdr[6:]).decode("utf-8", "replace")
+                    user, _, pw = raw.partition(":")
+                    ok = hmac.compare_digest(user, admin_user) and hmac.compare_digest(pw, admin_password)
+                except Exception:
+                    ok = False
+            if not ok:
+                self._send(401, b"authentication required", "text/plain; charset=utf-8",
+                           {"WWW-Authenticate": 'Basic realm="netmon admin"'})
+                return False
+            return True
+
         def do_GET(self):
             path = urlparse(self.path)
             route = path.path
@@ -438,7 +646,27 @@ def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str):
                     "last_run": st.last_run.astimezone().strftime("%Y-%m-%d %H:%M:%S") if st.last_run else None,
                     "last_error": st.last_error,
                     "next_report_in": st.next_report_in,
+                    "ai_enabled": ai_enabled,
+                    "admin_enabled": admin_enabled,
                 })
+
+            elif route == "/admin":
+                if not self._require_admin():
+                    return
+                self._send(200, ADMIN_HTML.encode("utf-8"), "text/html; charset=utf-8")
+
+            elif route == "/api/settings":
+                if not self._require_admin():
+                    return
+                self._json(monitor.settings.as_dict())
+
+            elif route == "/api/last-report":
+                lr = db.get_last_report()
+                if lr is None:
+                    self._json({"available": False})
+                else:
+                    html, ts = lr
+                    self._json({"available": True, "html": html, "text": _html_to_text(html), "time": ts})
 
             elif route == "/api/latest":
                 latest = db.get_latest_with_device_count()
@@ -501,6 +729,29 @@ def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str):
                     target=self._safe_manual_run, name="netmon-manual-run", daemon=True
                 ).start()
                 self._json({"started": True})
+
+            elif route == "/api/run-report":
+                if monitor.state.running:
+                    self._json({"started": False, "reason": "already running"}, code=409)
+                    return
+                threading.Thread(
+                    target=self._safe_report, name="netmon-report", daemon=True
+                ).start()
+                self._json({"started": True})
+
+            elif route == "/api/settings":
+                if not self._require_admin():
+                    return
+                body = self._read_json()
+                if body is None or not isinstance(body, dict):
+                    self._json({"ok": False, "errors": {"_": "invalid JSON body"}}, code=400)
+                    return
+                errors = monitor.settings.save(body)
+                if errors:
+                    self._json({"ok": False, "errors": errors}, code=400)
+                else:
+                    self._json({"ok": True})
+
             else:
                 self._send(404, b"not found", "text/plain; charset=utf-8")
 
@@ -511,12 +762,20 @@ def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str):
             except Exception as e:
                 log.error(f"Manual run thread failed: {e}")
 
+        @staticmethod
+        def _safe_report():
+            try:
+                monitor.run_report_now()
+            except Exception as e:
+                log.error(f"On-demand report thread failed: {e}")
+
     return Handler
 
 
-def start_web_server(db: sqlite.DB, monitor: Monitor, host: str, port: int, notifier_name: str) -> ThreadingHTTPServer:
+def start_web_server(db: sqlite.DB, monitor: Monitor, host: str, port: int, notifier_name: str,
+                     admin_user: str = "", admin_password: str = "", ai_enabled: bool = False) -> ThreadingHTTPServer:
     """Start the dashboard HTTP server on a daemon thread and return it."""
-    handler = make_handler(db, monitor, notifier_name)
+    handler = make_handler(db, monitor, notifier_name, admin_user, admin_password, ai_enabled)
     httpd = ThreadingHTTPServer((host, port), handler)
     thread = threading.Thread(target=httpd.serve_forever, name="netmon-web", daemon=True)
     thread.start()
