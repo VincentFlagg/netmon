@@ -141,6 +141,30 @@ cp .env.example .env
 > [!TIP]
 > **You're not locked into OpenAI.** `ai.py` talks to any OpenAI-compatible endpoint, so a local inference server (e.g. [Ollama](https://ollama.com), LM Studio) works too — just point `AI_BASE_URL` at it. For report quality that holds up, use a model with **at least ~7B parameters**; a solid local pick is **Gemma 4 12B at 4-bit (QAT) quantization** (`gemma4:12b-it-qat` via Ollama), which fits comfortably on 16GB of RAM.
 
+#### Free AI options
+
+The report runs only every 4 hours (~6 calls/day), so a **free tier easily covers it**. netmon needs an OpenAI-compatible endpoint — set all three `AI_*` variables (they're all-or-nothing). Good free choices:
+
+| Provider | `AI_BASE_URL` | Example `AI_MODEL` | `AI_API_KEY` |
+| :-- | :-- | :-- | :-- |
+| **Groq** (fast, generous free tier) | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | from [console.groq.com](https://console.groq.com) |
+| **Google Gemini** (free tier) | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-2.0-flash` | from [aistudio.google.com](https://aistudio.google.com/apikey) |
+| **OpenRouter** (free models) | `https://openrouter.ai/api/v1` | `meta-llama/llama-3.3-70b-instruct:free` | from [openrouter.ai](https://openrouter.ai/keys) |
+| **Ollama** (local, fully private) | `http://<host>:11434/v1` | `gemma2:9b` (or smaller on weak hardware) | any non-empty string, e.g. `ollama` |
+
+Example (Groq) in a compose `environment:` block:
+
+```yaml
+      AI_API_KEY: "gsk_your_groq_key"
+      AI_MODEL: "llama-3.3-70b-versatile"
+      AI_BASE_URL: "https://api.groq.com/openai/v1"
+```
+
+Notes:
+- Model names and free-tier limits change over time — check the provider's current docs if a model name is rejected.
+- **Local (Ollama):** `AI_API_KEY` is ignored by Ollama but must still be non-empty. With `network_mode: host`, point `AI_BASE_URL` at the Ollama host on your LAN (e.g. `http://192.168.0.24:11434/v1`). A low-power NAS (no GPU) can only run small models slowly — for a UGREEN N100, a cloud free tier is the easier path.
+- Only the **4-hour detailed report** uses AI; the 30-minute status updates never call it. Leave the `AI_*` variables unset to run with no AI commentary at all.
+
 ### 5. Run the Bot
 
 ```bash
