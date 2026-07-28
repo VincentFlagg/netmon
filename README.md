@@ -195,7 +195,7 @@ The dashboard shows:
 
 * **Latest metrics** — a prominent ISP banner plus download, upload, ping, and device-count cards, next to the 24-hour graph.
 * **24-hour graph** — the same `matplotlib` chart that goes to your notifier, refreshed automatically.
-* **Device list** — click the Devices card to see the devices discovered over the last 24 hours: online/offline, IP, hostname (best-effort reverse DNS), latency, and when each was last seen.
+* **Device list** — click the Devices card to see the devices discovered over the last 24 hours: online/offline, name (hostname), **MAC address and vendor** (from the `nmap` ARP scan), IP, latency, and when each was last seen.
 * **History** — the latest 10 measurements, with a **View all** link to a full `/history` page.
 * **Run speed test now** — a button that triggers an immediate measurement on demand (it stores the result and sends a mini report, without disturbing the scheduled 4-hour detailed-report cadence).
 * **Run AI report now** *(when AI is configured)* — generate and send a detailed AI report on demand; the latest report is also shown on the dashboard.

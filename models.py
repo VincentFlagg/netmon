@@ -62,25 +62,34 @@ class NetworkMetric:
 class NetworkDevice:
     id: uuid.UUID
     ip: str
-    latency_ms: float 
-    timestamp: datetime 
+    latency_ms: float
+    timestamp: datetime
+    mac: str = ""
+    vendor: str = ""
+    hostname: str = ""
 
     @classmethod
     def create(
         cls,
         ip: str,
         latency_ms: float,
+        mac: str = "",
+        vendor: str = "",
+        hostname: str = "",
     ) -> "NetworkDevice":
         if not ip or not ip.strip():
             raise ValueError("IP cannot be empty")
         if latency_ms < 0:
             raise ValueError("Latency must be non-negative")
-    
+
         return cls(
             id=uuid.UUID(uuid7str()),
             ip=ip,
             latency_ms=latency_ms,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
+            mac=mac,
+            vendor=vendor,
+            hostname=hostname,
         )
 
 

@@ -14,6 +14,18 @@ control when you upgrade; see the [README](README.md#docker).
 
 _Nothing yet._
 
+## [1.3.0] - 2026-07-28
+
+### Added
+- **MAC address & vendor for discovered devices** — the `nmap` ARP scan now
+  captures each device's MAC address, its OUI vendor (e.g. "Ubiquiti Inc",
+  "Apple, Inc."), and any nmap-provided hostname. The device modal shows
+  Name / Vendor / MAC / IP / latency / last-seen.
+
+### Changed
+- `device_scans` gained `macs`, `vendors`, and `hostnames` columns; existing
+  databases are migrated automatically on startup (old rows keep working).
+
 ## [1.2.1] - 2026-07-27
 
 ### Fixed
@@ -98,7 +110,8 @@ report engine.
   line, so generated graphs are correctly ignored.
 - README clone URLs now point at this repository.
 
-[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/VincentFlagg/netmon/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/VincentFlagg/netmon/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/VincentFlagg/netmon/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/VincentFlagg/netmon/compare/v1.0.0...v1.1.0

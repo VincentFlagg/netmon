@@ -70,22 +70,31 @@ def _resolve_hostnames(ips: list[str], budget: float = 2.0) -> dict[str, str]:
 
 def _devices_payload(db: sqlite.DB) -> dict:
     """Devices seen in the last 24h, newest scan first, with per-device
-    last-seen and online (present in the most recent scan) status."""
+    last-seen, MAC/vendor, and online (present in the most recent scan) status."""
     history = db.get_device_history(24)
     if not history:
         return {"scan_time": None, "online_count": 0, "devices": []}
 
-    latest_ts, latest_ips, latest_lats = history[0]
-    latest_set = set(latest_ips)
-    latest_lat = dict(zip(latest_ips, latest_lats))
+    latest = history[0]
+    latest_set = set(latest["ips"])
+    latest_lat = dict(zip(latest["ips"], latest["latencies"]))
 
-    last_seen: dict[str, "object"] = {}
-    for ts, ips, _lats in history:  # newest first => first occurrence is latest
-        for ip in ips:
-            if ip not in last_seen:
-                last_seen[ip] = ts
+    # Newest scan first, so the first time we see an IP is its latest info.
+    info: dict[str, dict] = {}
+    for scan in history:
+        ips = scan["ips"]
+        macs, vendors, hostnames = scan["macs"], scan["vendors"], scan["hostnames"]
+        for i, ip in enumerate(ips):
+            if ip not in info:
+                info[ip] = {
+                    "last_seen": scan["timestamp"],
+                    "mac": macs[i] if i < len(macs) else "",
+                    "vendor": vendors[i] if i < len(vendors) else "",
+                    "hostname": hostnames[i] if i < len(hostnames) else "",
+                }
 
-    names = _resolve_hostnames(list(last_seen.keys()))
+    # Reverse DNS as a fallback name when nmap didn't supply a hostname.
+    resolved = _resolve_hostnames(list(info.keys()))
 
     def ip_key(ip: str):
         try:
@@ -94,20 +103,23 @@ def _devices_payload(db: sqlite.DB) -> dict:
             return (0,)
 
     devices = []
-    for ip, ts in last_seen.items():
+    for ip, d in info.items():
         online = ip in latest_set
+        name = d["hostname"] or resolved.get(ip, "")  # nmap hostname, else reverse DNS
         devices.append({
             "ip": ip,
-            "hostname": names.get(ip, ""),
+            "name": name,
+            "vendor": d["vendor"],
+            "mac": d["mac"],
             "latency_ms": round(latest_lat.get(ip, 0.0), 2) if online else None,
-            "last_seen": ts.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_seen": d["last_seen"].astimezone().strftime("%Y-%m-%d %H:%M:%S"),
             "online": online,
         })
-    devices.sort(key=lambda d: (not d["online"], ip_key(d["ip"])))
+    devices.sort(key=lambda x: (not x["online"], ip_key(x["ip"])))
 
     return {
-        "scan_time": latest_ts.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
-        "online_count": len(latest_ips),
+        "scan_time": latest["timestamp"].astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+        "online_count": len(latest["ips"]),
         "devices": devices,
     }
 
@@ -270,8 +282,8 @@ INDEX_HTML = """<!doctype html>
     <div class="sub" id="devSub"></div>
     <div class="table-wrap" style="border:none">
       <table>
-        <thead><tr><th></th><th>Name</th><th>IP</th><th>Latency (ms)</th><th>Last seen</th></tr></thead>
-        <tbody id="devBody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        <thead><tr><th></th><th>Name</th><th>Vendor</th><th>MAC</th><th>IP</th><th>Latency (ms)</th><th>Last seen</th></tr></thead>
+        <tbody id="devBody"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -387,11 +399,11 @@ async function openDevices() {
       d.scan_time ? `${d.online_count} online · last scan ${d.scan_time}` : '';
     const body = document.getElementById('devBody');
     if (!d.devices.length) {
-      body.innerHTML = '<tr><td colspan="5" class="empty">No devices found</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" class="empty">No devices found</td></tr>';
     } else {
       body.innerHTML = d.devices.map(x =>
         `<tr><td><span class="dot ${x.online?'on':'off'}" title="${x.online?'online':'offline'}"></span></td>` +
-        `<td>${x.hostname || '—'}</td><td>${x.ip}</td>` +
+        `<td>${x.name || '—'}</td><td>${x.vendor || '—'}</td><td>${x.mac || '—'}</td><td>${x.ip}</td>` +
         `<td>${x.latency_ms == null ? '—' : x.latency_ms}</td><td>${x.last_seen}</td></tr>`).join('');
     }
   } catch (e) { console.error(e); }

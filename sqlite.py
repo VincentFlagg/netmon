@@ -43,6 +43,7 @@ class DB:
             db = cls(conn)
             with db.transaction():
                 db._create_schema()
+                db._migrate()
             return db
         except sqlite3.Error as e:
             raise RuntimeError(f"Failed to open database connection: {e}")
@@ -67,7 +68,10 @@ class DB:
             CREATE TABLE IF NOT EXISTS device_scans (
                 id             TEXT PRIMARY KEY,
                 ips            TEXT NOT NULL,
-                latencies      TEXT NOT NULL
+                latencies      TEXT NOT NULL,
+                macs           TEXT NOT NULL DEFAULT '[]',
+                vendors        TEXT NOT NULL DEFAULT '[]',
+                hostnames      TEXT NOT NULL DEFAULT '[]'
             );
         """)
 
@@ -87,6 +91,16 @@ class DB:
                 value TEXT NOT NULL
             );
         """)
+
+    def _migrate(self):
+        # Add device_scans columns to databases created before MAC/vendor
+        # capture. Existing rows get '[]' so reads stay consistent.
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(device_scans);")}
+        for col in ("macs", "vendors", "hostnames"):
+            if col not in cols:
+                self.conn.execute(
+                    f"ALTER TABLE device_scans ADD COLUMN {col} TEXT NOT NULL DEFAULT '[]';"
+                )
 
     @contextmanager
     def transaction(self):
@@ -123,12 +137,15 @@ class DB:
         scan_id   = uuid.UUID(uuid7str())
         ips       = json.dumps([d.ip         for d in devices])
         latencies = json.dumps([d.latency_ms for d in devices])
+        macs      = json.dumps([d.mac        for d in devices])
+        vendors   = json.dumps([d.vendor     for d in devices])
+        hostnames = json.dumps([d.hostname   for d in devices])
 
         with self.transaction():
             self.conn.execute("""
-                INSERT INTO device_scans (id, ips, latencies)
-                VALUES (?, ?, ?)
-            """, (str(scan_id), ips, latencies))
+                INSERT INTO device_scans (id, ips, latencies, macs, vendors, hostnames)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (str(scan_id), ips, latencies, macs, vendors, hostnames))
         return scan_id
 
     def add_speedtest(self, speedtest: models.SpeedTest):
@@ -237,13 +254,13 @@ class DB:
 
         return metrics, device_counts
 
-    def get_device_history(self, hours: int = 24) -> list[tuple[datetime, list[str], list[float]]]:
+    def get_device_history(self, hours: int = 24) -> list[dict]:
         # Every device scan in the window, newest first, so the dashboard can
         # build a per-device "last seen" view. device_scans has no timestamp of
         # its own, so the scan time comes from the joined metric.
         hours = max(1, int(hours))
         rows = self._fetchall("""
-            SELECT m.timestamp, ds.ips, ds.latencies
+            SELECT m.timestamp, ds.ips, ds.latencies, ds.macs, ds.vendors, ds.hostnames
             FROM device_scans ds
             JOIN speedtest st ON st.device_scans_id = ds.id
             JOIN metrics m ON m.id = st.metrics_id
@@ -251,9 +268,22 @@ class DB:
             ORDER BY m.timestamp DESC;
         """, (f"-{hours} hours",))
 
-        out: list[tuple[datetime, list[str], list[float]]] = []
-        for ts, ips, latencies in rows:
-            out.append((datetime.fromisoformat(ts), json.loads(ips), json.loads(latencies)))
+        def _load(value):
+            try:
+                return json.loads(value) if value else []
+            except (ValueError, TypeError):
+                return []
+
+        out: list[dict] = []
+        for ts, ips, latencies, macs, vendors, hostnames in rows:
+            out.append({
+                "timestamp": datetime.fromisoformat(ts),
+                "ips": _load(ips),
+                "latencies": _load(latencies),
+                "macs": _load(macs),
+                "vendors": _load(vendors),
+                "hostnames": _load(hostnames),
+            })
         return out
 
     # ------------------------------------------------------------------ #
