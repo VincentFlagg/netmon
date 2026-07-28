@@ -187,6 +187,10 @@ Alongside the Telegram/Discord alerts, netmon serves a lightweight **local web d
 http://<host>:8080
 ```
 
+<p align="center">
+  <img src="assets/dashboard.png" alt="netmon web dashboard" width="820" />
+</p>
+
 The dashboard shows:
 
 * **Latest metrics** — a prominent ISP banner plus download, upload, ping, and device-count cards, next to the 24-hour graph.
@@ -196,6 +200,10 @@ The dashboard shows:
 * **Run speed test now** — a button that triggers an immediate measurement on demand (it stores the result and sends a mini report, without disturbing the scheduled 4-hour detailed-report cadence).
 * **Run AI report now** *(when AI is configured)* — generate and send a detailed AI report on demand; the latest report is also shown on the dashboard.
 * **Download CSV** — export the recent metrics as a spreadsheet-friendly file.
+
+<p align="center">
+  <img src="assets/devices.png" alt="Discovered devices modal" width="700" />
+</p>
 
 The page auto-refreshes every 30 seconds. Configure it with `WEB_ENABLED`, `WEB_HOST`, and `WEB_PORT` (see the `.env` table above), or set `WEB_ENABLED=false` to turn it off entirely.
 
@@ -210,6 +218,10 @@ Set `ADMIN_USER` and `ADMIN_PASSWORD` to enable an authenticated **`/admin`** pa
 * **Report frequency** — how many runs between detailed AI reports.
 * **Status message** — the wording/format of the per-run update (with placeholders like `{download:.1f}`, `{device_count}`, `{status_text}`).
 * **AI behaviour** — the system prompt that shapes the AI report (tone, structure, length).
+
+<p align="center">
+  <img src="assets/admin.png" alt="netmon admin page" width="820" />
+</p>
 
 Settings are stored in the database (on your volume), so they survive restarts and image updates. Changes take effect on the next run. If `ADMIN_USER`/`ADMIN_PASSWORD` are unset, the admin page is disabled entirely.
 
