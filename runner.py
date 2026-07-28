@@ -85,18 +85,38 @@ class Runner:
 
     @staticmethod
     def _parse_device(host: ET.Element) -> models.NetworkDevice | None:
-        addr   = host.find("address")
         status = host.find("status")
-        if addr is None or status is None or status.get("state") != "up":
+        if status is None or status.get("state") != "up":
             return None
+
+        # An nmap ARP scan reports both the IPv4 and (for LAN hosts) the MAC
+        # address, the MAC's OUI vendor, and sometimes a reverse-DNS hostname.
+        ip = mac = vendor = ""
+        for addr in host.findall("address"):
+            kind = addr.get("addrtype")
+            if kind == "ipv4":
+                ip = addr.get("addr") or ip
+            elif kind == "mac":
+                mac = addr.get("addr") or mac
+                vendor = addr.get("vendor") or vendor
+        if not ip:
+            return None
+
+        hostname = ""
+        hn = host.find("hostnames/hostname")
+        if hn is not None:
+            hostname = hn.get("name") or ""
 
         times  = host.find("times")
         srtt   = times.get("srtt") if times is not None else None
         latency_ms = round(int(srtt) / 1000, 2) if srtt is not None else 0
 
         return models.NetworkDevice.create(
-            ip=addr.get("addr") or "",
-            latency_ms=latency_ms
+            ip=ip,
+            latency_ms=latency_ms,
+            mac=mac,
+            vendor=vendor,
+            hostname=hostname,
         )
 
     def run_devices_scan(self) -> list[models.NetworkDevice]:
