@@ -1,0 +1,36 @@
+name: Release
+
+# Creates a GitHub Release (with notes from CHANGELOG.md) for each version.
+#   * push to main       -> release the version currently in pyproject.toml
+#   * manual dispatch     -> "current" (default), "all" (backfill every
+#                            CHANGELOG version), or a specific "X.Y.Z"
+# Idempotent: a version that already has a release is skipped.
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["CHANGELOG.md", "pyproject.toml"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release: "current", "all", or e.g. "1.3.0"'
+        required: false
+        default: "current"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create releases from CHANGELOG
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          TARGET_SHA: ${{ github.sha }}
+        run: python3 .github/scripts/make_releases.py
