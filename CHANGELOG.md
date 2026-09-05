@@ -14,6 +14,15 @@ control when you upgrade; see the [README](README.md#docker).
 
 _Nothing yet._
 
+## [1.4.0] - 2026-09-05
+
+### Added
+- **AI connection settings on the admin page** — the base URL, model, and API
+  key are now editable from `/admin` (the key is write-only; the page shows only
+  whether one is set). Blank fields fall back to the `AI_*` env vars, so AI can
+  be set up or fixed without restarting the container. The client is rebuilt
+  automatically when the effective config changes.
+
 ## [1.3.0] - 2026-07-28
 
 ### Added
@@ -110,7 +119,8 @@ report engine.
   line, so generated graphs are correctly ignored.
 - README clone URLs now point at this repository.
 
-[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/VincentFlagg/netmon/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/VincentFlagg/netmon/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/VincentFlagg/netmon/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/VincentFlagg/netmon/compare/v1.1.0...v1.2.0

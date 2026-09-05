@@ -44,16 +44,23 @@ class Monitor:
         self,
         db: sqlite.DB,
         notifier: Notifier,
-        netmon_ai: ai.Client | None,
         r: runner.Runner,
+        ai_api_key: str = "",
+        ai_model: str = "",
+        ai_base_url: str = "",
     ):
         self.db = db
         self.notifier = notifier
-        # None when AI is not configured — reports are then sent graph-only.
-        self.ai = netmon_ai
         self.runner = r
-        # Runtime-editable settings (interval, templates, prompt, schedule).
+        # Runtime-editable settings (interval, templates, prompt, schedule, AI).
         self.settings = settings_mod.Settings(db)
+
+        # AI connection from env vars; admin settings override these when set.
+        # The client is built lazily and rebuilt when the effective config
+        # changes, so AI can be configured/fixed from the admin page.
+        self._env_ai = (ai_api_key, ai_model, ai_base_url)
+        self._ai_client: ai.Client | None = None
+        self._ai_cfg: tuple | None = None
 
         self.counter = 0
         # Serialises whole cycles so a manual run can't overlap a scheduled one.
@@ -63,6 +70,40 @@ class Monitor:
         self._graph_lock = threading.Lock()
 
         self.state = RunState()
+
+    # ------------------------------------------------------------------ #
+    # AI client (effective config = admin settings override, else env)
+    # ------------------------------------------------------------------ #
+    def _effective_ai(self) -> tuple[str, str, str]:
+        key = self.settings.ai_api_key or self._env_ai[0]
+        model = self.settings.ai_model or self._env_ai[1]
+        base = self.settings.ai_base_url or self._env_ai[2]
+        return key, model, base
+
+    @property
+    def ai_configured(self) -> bool:
+        return all(self._effective_ai())
+
+    def _get_ai_client(self) -> ai.Client | None:
+        key, model, base = self._effective_ai()
+        if not (key and model and base):
+            return None
+        cfg = (key, model, base)
+        if cfg != self._ai_cfg or self._ai_client is None:
+            old = self._ai_client
+            try:
+                self._ai_client = ai.Client.init(key, model, base)
+                self._ai_cfg = cfg
+            except Exception as e:
+                log.error(f"Failed to initialise AI client: {e}")
+                self._ai_client, self._ai_cfg = None, None
+                return None
+            if old is not None:
+                try:
+                    old.close()
+                except Exception:
+                    pass
+        return self._ai_client
 
     # ------------------------------------------------------------------ #
     # Measurement
@@ -142,15 +183,17 @@ class Monitor:
         user_message = self._build_report_user_message(metrics, device_counts)
 
         self.notifier.send_chat_action(ChatAction.TYPING)
-        if self.ai is None:
-            # AI intentionally not configured: send the graph with a plain header.
+        ai_client = self._get_ai_client()
+        if ai_client is None:
+            # AI not configured: send the graph with a plain header.
             report = (
                 "<b>Network Speed Test Report (24h Analysis)</b>\n\n"
-                "<i>AI commentary is disabled. Raw graph data is attached below.</i>"
+                "<i>AI commentary is disabled. Configure the AI connection on the "
+                "admin page or via the AI_* env vars. Raw graph data is attached below.</i>"
             )
         else:
             try:
-                report = self.ai.send_message(user_message, self.settings.report_system_prompt)
+                report = ai_client.send_message(user_message, self.settings.report_system_prompt)
                 report = report.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
             except Exception as e:
                 # AI backend down/unreachable/misconfigured: don't lose the whole
@@ -229,6 +272,7 @@ class Monitor:
             return False
         try:
             self.state.running = True
+            self.settings.reload()  # pick up admin AI/prompt changes
             self._send_detailed_report()
             self.state.last_error = None
             return True

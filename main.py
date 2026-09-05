@@ -3,7 +3,6 @@ import sys
 import logging
 import config as cfg
 import sqlite
-import ai
 import tg
 import discord_hook
 import ntfy_hook
@@ -53,21 +52,21 @@ def main():
     with ExitStack() as stack:
         database = stack.enter_context(sqlite.DB.init(conf.db_path))
 
-        netmon_ai = None
-        if conf.ai_enabled:
-            netmon_ai = stack.enter_context(
-                ai.Client.init(conf.ai_api_key, conf.model, conf.base_url)
-            )
-        else:
-            log.info("AI is not configured — reports will be sent without commentary.")
-
-        monitor = Monitor(database, t, netmon_ai, r)
+        # AI is built inside the Monitor from the effective config (admin
+        # settings override the AI_* env vars), so it can be set up or fixed
+        # from the admin page without a restart.
+        monitor = Monitor(
+            database, t, r,
+            ai_api_key=conf.ai_api_key, ai_model=conf.model, ai_base_url=conf.base_url,
+        )
+        if not monitor.ai_configured:
+            log.info("AI is not configured — reports will be sent without commentary "
+                     "(configure it on the admin page or via the AI_* env vars).")
 
         if conf.web_enabled:
             webapp.start_web_server(
                 database, monitor, conf.web_host, conf.web_port, conf.notifier,
                 admin_user=conf.admin_user, admin_password=conf.admin_password,
-                ai_enabled=conf.ai_enabled,
             )
 
         log.info("The bot has been started.")

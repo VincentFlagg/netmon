@@ -17,6 +17,10 @@ DEFAULTS: dict = {
     "active_days": [0, 1, 2, 3, 4, 5, 6],  # 0=Mon .. 6=Sun (datetime.weekday())
     "mini_report_template": templates.MINI_REPORT_TEMPLATE,
     "report_system_prompt": templates.REPORT_SYSTEM_PROMPT,
+    # AI connection overrides (blank = fall back to the AI_* env vars).
+    "ai_base_url": "",
+    "ai_model": "",
+    "ai_api_key": "",
 }
 
 _DUMMY_TEMPLATE_CTX = {
@@ -89,6 +93,11 @@ def validate(updates: dict) -> tuple[dict, dict]:
         else:
             cleaned["report_system_prompt"] = p
 
+    # AI connection overrides — all optional (blank falls back to env vars).
+    for key in ("ai_base_url", "ai_model", "ai_api_key"):
+        if key in updates:
+            cleaned[key] = str(updates[key]).strip()
+
     return cleaned, errors
 
 
@@ -110,6 +119,14 @@ class Settings:
 
     def as_dict(self) -> dict:
         return dict(self._values)
+
+    def admin_dict(self) -> dict:
+        """Like as_dict, but never exposes the stored API key — the admin page
+        shows only whether one is set and can update it."""
+        d = self.as_dict()
+        d["ai_api_key_set"] = bool(d.get("ai_api_key", "").strip())
+        d["ai_api_key"] = ""
+        return d
 
     def save(self, updates: dict) -> dict:
         """Validate and persist. Returns {} on success or a dict of errors."""
@@ -137,6 +154,18 @@ class Settings:
     @property
     def report_system_prompt(self) -> str:
         return self._values["report_system_prompt"]
+
+    @property
+    def ai_base_url(self) -> str:
+        return self._values.get("ai_base_url", "")
+
+    @property
+    def ai_model(self) -> str:
+        return self._values.get("ai_model", "")
+
+    @property
+    def ai_api_key(self) -> str:
+        return self._values.get("ai_api_key", "")
 
     def within_active_window(self, now_local) -> bool:
         if now_local.weekday() not in self._values["active_days"]:
