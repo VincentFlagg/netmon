@@ -546,6 +546,11 @@ ADMIN_HTML = """<!doctype html>
     <label>API key</label>
     <input type="password" id="ai_api_key" autocomplete="off">
     <div class="err" id="err_ai_api_key"></div>
+    <div style="margin-top:12px">
+      <button type="button" onclick="testAI()">Test connection</button>
+      <span class="status-pill" id="aiTestMsg" style="margin-left:10px"></span>
+    </div>
+    <p class="help" style="margin-top:8px">Save first — the test uses the saved settings and makes one real call to the endpoint.</p>
   </div>
 
   <div class="form-card">
@@ -608,6 +613,16 @@ async function save() {
     }
   } catch (e) { alert('Save failed: ' + e); }
   btn.disabled = false;
+}
+
+async function testAI() {
+  const el = document.getElementById('aiTestMsg');
+  el.textContent = 'Testing…'; el.className = 'status-pill busy';
+  try {
+    const d = await (await fetch('/api/ai-test', { method: 'POST' })).json();
+    if (d.ok) { el.textContent = '✓ AI endpoint reachable'; el.className = 'saved'; }
+    else { el.textContent = '✗ ' + d.error; el.className = 'status-pill err'; }
+  } catch (e) { el.textContent = '✗ ' + e; el.className = 'status-pill err'; }
 }
 load();
 </script>
@@ -777,6 +792,12 @@ def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str,
                     target=self._safe_report, name="netmon-report", daemon=True
                 ).start()
                 self._json({"started": True})
+
+            elif route == "/api/ai-test":
+                if not self._require_admin():
+                    return
+                ok, err = monitor.test_ai()
+                self._json({"ok": ok, "error": err})
 
             elif route == "/api/settings":
                 if not self._require_admin():
