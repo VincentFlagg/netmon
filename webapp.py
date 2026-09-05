@@ -528,6 +528,27 @@ ADMIN_HTML = """<!doctype html>
   </div>
 
   <div class="form-card">
+    <h3>AI connection</h3>
+    <p class="help">Any OpenAI-compatible endpoint. Leave a field blank to fall back to its
+      <span class="mono">AI_*</span> environment variable. All three (URL, model, key) must be
+      set for AI reports to work — e.g. Groq: <span class="mono">https://api.groq.com/openai/v1</span>
+      + <span class="mono">llama-3.3-70b-versatile</span>.</p>
+    <div class="row">
+      <div>
+        <label>Base URL</label>
+        <input type="text" id="ai_base_url" placeholder="https://api.openai.com/v1">
+      </div>
+      <div>
+        <label>Model</label>
+        <input type="text" id="ai_model" placeholder="gpt-4o-mini">
+      </div>
+    </div>
+    <label>API key</label>
+    <input type="password" id="ai_api_key" autocomplete="off">
+    <div class="err" id="err_ai_api_key"></div>
+  </div>
+
+  <div class="form-card">
     <h3>AI behaviour</h3>
     <p class="help">The system prompt that shapes the 4-hour report — tone, structure, length. Only used when AI is configured.</p>
     <textarea id="report_system_prompt" style="min-height:220px"></textarea>
@@ -543,7 +564,7 @@ ADMIN_HTML = """<!doctype html>
 <script>
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const NUM = ["interval_seconds","report_every","active_hours_start","active_hours_end"];
-const TXT = ["mini_report_template","report_system_prompt"];
+const TXT = ["mini_report_template","report_system_prompt","ai_base_url","ai_model"];
 
 function renderDays(active) {
   document.getElementById('days').innerHTML = DAYS.map((d,i) =>
@@ -553,7 +574,10 @@ function renderDays(active) {
 async function load() {
   const s = await (await fetch('/api/settings')).json();
   NUM.forEach(k => document.getElementById(k).value = s[k]);
-  TXT.forEach(k => document.getElementById(k).value = s[k]);
+  TXT.forEach(k => document.getElementById(k).value = s[k] || '');
+  // The API key is never sent back; show whether one is stored.
+  document.getElementById('ai_api_key').placeholder =
+    s.ai_api_key_set ? '•••••••• (stored — leave blank to keep)' : 'not set';
   renderDays(s.active_days || []);
 }
 
@@ -563,6 +587,9 @@ async function save() {
   const payload = {};
   NUM.forEach(k => payload[k] = parseInt(document.getElementById(k).value, 10));
   TXT.forEach(k => payload[k] = document.getElementById(k).value);
+  // Only send the API key if the user typed a new one (blank = keep current).
+  const keyVal = document.getElementById('ai_api_key').value;
+  if (keyVal) payload.ai_api_key = keyVal;
   payload.active_days = [...document.querySelectorAll('#days input:checked')].map(c => parseInt(c.value,10));
 
   const btn = document.getElementById('saveBtn'); btn.disabled = true;
@@ -589,7 +616,7 @@ load();
 
 
 def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str,
-                 admin_user: str = "", admin_password: str = "", ai_enabled: bool = False):
+                 admin_user: str = "", admin_password: str = ""):
     admin_enabled = bool(admin_user.strip()) and bool(admin_password)
 
     class Handler(BaseHTTPRequestHandler):
@@ -658,7 +685,7 @@ def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str,
                     "last_run": st.last_run.astimezone().strftime("%Y-%m-%d %H:%M:%S") if st.last_run else None,
                     "last_error": st.last_error,
                     "next_report_in": st.next_report_in,
-                    "ai_enabled": ai_enabled,
+                    "ai_enabled": monitor.ai_configured,
                     "admin_enabled": admin_enabled,
                 })
 
@@ -670,7 +697,7 @@ def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str,
             elif route == "/api/settings":
                 if not self._require_admin():
                     return
-                self._json(monitor.settings.as_dict())
+                self._json(monitor.settings.admin_dict())
 
             elif route == "/api/last-report":
                 lr = db.get_last_report()
@@ -785,9 +812,9 @@ def make_handler(db: sqlite.DB, monitor: Monitor, notifier_name: str,
 
 
 def start_web_server(db: sqlite.DB, monitor: Monitor, host: str, port: int, notifier_name: str,
-                     admin_user: str = "", admin_password: str = "", ai_enabled: bool = False) -> ThreadingHTTPServer:
+                     admin_user: str = "", admin_password: str = "") -> ThreadingHTTPServer:
     """Start the dashboard HTTP server on a daemon thread and return it."""
-    handler = make_handler(db, monitor, notifier_name, admin_user, admin_password, ai_enabled)
+    handler = make_handler(db, monitor, notifier_name, admin_user, admin_password)
     httpd = ThreadingHTTPServer((host, port), handler)
     thread = threading.Thread(target=httpd.serve_forever, name="netmon-web", daemon=True)
     thread.start()
