@@ -148,7 +148,7 @@ The report runs only every 4 hours (~6 calls/day), so a **free tier easily cover
 
 | Provider | `AI_BASE_URL` | Example `AI_MODEL` | `AI_API_KEY` |
 | :-- | :-- | :-- | :-- |
-| **Groq** (fast, generous free tier) | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | from [console.groq.com](https://console.groq.com) |
+| **Groq** (fast, generous free tier) | `https://api.groq.com/openai/v1` | a current Groq model — see the note below | from [console.groq.com](https://console.groq.com) |
 | **Google Gemini** (free tier) | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-2.0-flash` | from [aistudio.google.com](https://aistudio.google.com/apikey) |
 | **OpenRouter** (free models) | `https://openrouter.ai/api/v1` | `meta-llama/llama-3.3-70b-instruct:free` | from [openrouter.ai](https://openrouter.ai/keys) |
 | **Ollama** (local, fully private) | `http://<host>:11434/v1` | `gemma2:9b` (or smaller on weak hardware) | any non-empty string, e.g. `ollama` |
@@ -157,12 +157,16 @@ Example (Groq) in a compose `environment:` block:
 
 ```yaml
       AI_API_KEY: "gsk_your_groq_key"
-      AI_MODEL: "llama-3.3-70b-versatile"
+      AI_MODEL: "llama-3.1-8b-instant"    # pick a model from your provider's current list
       AI_BASE_URL: "https://api.groq.com/openai/v1"
 ```
 
 Notes:
-- Model names and free-tier limits change over time — check the provider's current docs if a model name is rejected.
+- **Model names change** — providers deprecate and rename models, so a name that worked before can start returning `model_not_found`. The example models above are illustrative, not guaranteed current. List what your key can actually use, e.g. for Groq:
+  ```bash
+  curl -s https://api.groq.com/openai/v1/models -H "Authorization: Bearer YOUR_KEY" | grep '"id"'
+  ```
+  then pick one. The admin page's **Test connection** button reports the exact error (including `model_not_found`) so you can tell a bad model from a bad key or an unreachable endpoint.
 - **Local (Ollama):** `AI_API_KEY` is ignored by Ollama but must still be non-empty. With `network_mode: host`, point `AI_BASE_URL` at the Ollama host on your LAN (e.g. `http://192.168.0.24:11434/v1`). A low-power NAS (no GPU) can only run small models slowly — for a UGREEN N100, a cloud free tier is the easier path.
 - Only the **4-hour detailed report** uses AI; the 30-minute status updates never call it. Leave the `AI_*` variables unset to run with no AI commentary at all.
 
