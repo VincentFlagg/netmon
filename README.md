@@ -217,7 +217,7 @@ Set `ADMIN_USER` and `ADMIN_PASSWORD` to enable an authenticated **`/admin`** pa
 * **Schedule** — the interval between runs, and an optional active window (only run during certain **hours** and **days**).
 * **Report frequency** — how many runs between detailed AI reports.
 * **Status message** — the wording/format of the per-run update (with placeholders like `{download:.1f}`, `{device_count}`, `{status_text}`).
-* **AI connection** — the base URL, model, and API key for the AI (any OpenAI-compatible endpoint). Blank fields fall back to the `AI_*` env vars, so you can set up or fix the AI here without restarting. The stored key is never shown back — the page only indicates whether one is set.
+* **AI connection** — the base URL, model, and API key for the AI (any OpenAI-compatible endpoint). Blank fields fall back to the `AI_*` env vars, so you can set up or fix the AI here without restarting. The stored key is never shown back — the page only indicates whether one is set. A **Test connection** button makes one real call and shows the exact result (success, or the actual error) so you can diagnose a failing AI from the UI.
 * **AI behaviour** — the system prompt that shapes the AI report (tone, structure, length).
 
 <p align="center">

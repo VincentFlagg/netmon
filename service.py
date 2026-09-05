@@ -84,6 +84,36 @@ class Monitor:
     def ai_configured(self) -> bool:
         return all(self._effective_ai())
 
+    def test_ai(self) -> tuple[bool, str]:
+        """Make a tiny live call to the configured AI endpoint. Returns
+        (ok, error_message) — the real exception text on failure, so the admin
+        page can show exactly what's wrong. Bounded to ~20s."""
+        self.settings.reload()
+        client = self._get_ai_client()
+        if client is None:
+            key, model, base = self._effective_ai()
+            missing = [n for n, v in (("base URL", base), ("model", model), ("API key", key)) if not v]
+            return False, "AI is not configured — missing: " + ", ".join(missing)
+
+        result: dict = {}
+
+        def _work():
+            try:
+                client.send_message("ping", "Reply with the single word: ok")
+                result["ok"] = True
+            except Exception as e:  # noqa: BLE001 - surface the real reason
+                result["ok"] = False
+                result["err"] = f"{type(e).__name__}: {e}"
+
+        th = threading.Thread(target=_work, name="netmon-ai-test", daemon=True)
+        th.start()
+        th.join(20)
+        if th.is_alive():
+            return False, "Timed out after 20s contacting the AI endpoint — check the base URL and that the host is reachable from the container."
+        if result.get("ok"):
+            return True, ""
+        return False, result.get("err", "unknown error")
+
     def _get_ai_client(self) -> ai.Client | None:
         key, model, base = self._effective_ai()
         if not (key and model and base):
