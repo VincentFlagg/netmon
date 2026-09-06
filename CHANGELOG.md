@@ -14,6 +14,17 @@ control when you upgrade; see the [README](README.md#docker).
 
 _Nothing yet._
 
+## [1.6.0] - 2026-09-05
+
+### Added
+- **Plan-aware status** — an admin "Connection & plan" section for your
+  subscribed download/upload speeds and ping thresholds. When a plan is set,
+  the status line judges download as a percentage of the plan (≥85% good,
+  <50% bad) instead of fixed 150/60 Mbps thresholds, and the AI report is told
+  the plan so it stops treating a normal speed as "slow". Ping "good"/"bad"
+  cutoffs are editable too. Leave the plan at 0 to keep the old absolute
+  behaviour.
+
 ## [1.5.0] - 2026-09-05
 
 ### Added
@@ -128,7 +139,8 @@ report engine.
   line, so generated graphs are correctly ignored.
 - README clone URLs now point at this repository.
 
-[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/VincentFlagg/netmon/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/VincentFlagg/netmon/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/VincentFlagg/netmon/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/VincentFlagg/netmon/compare/v1.2.1...v1.3.0
