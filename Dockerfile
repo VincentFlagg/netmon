@@ -9,7 +9,13 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 #   speedtest-cli — bandwidth/ping measurement (provides the `speedtest` command)
 #   sudo          — runner.py runs `sudo -n nmap` for raw-socket ARP access;
 #                   the container runs as root, so this succeeds with no extra config
+#
+# `apt-get upgrade` applies the latest Debian security patches available at
+# build time to the base-image packages (openssl, gnutls, etc.). It doesn't
+# fix CVEs Debian hasn't patched yet, so rebuild periodically (the publish
+# workflow runs weekly) to pick up new fixes as they land.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends nmap speedtest-cli sudo \
     && rm -rf /var/lib/apt/lists/*
 
