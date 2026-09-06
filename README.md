@@ -266,6 +266,17 @@ In an image-based stack (e.g. `dockge-stack.yml`), pin a version to control upgr
 
 See **[CHANGELOG.md](CHANGELOG.md)** for what changed in each version. To publish a new version: bump `version` in `pyproject.toml` (and `uv.lock`), add a CHANGELOG entry, and push to `main` — the GitHub Action reads that version and tags the image `X.Y.Z` / `X.Y` / `X` / `latest` to match. (Pushing a `v*` git tag also triggers a matching build.)
 
+### Security & image updates
+
+Container image scanners (Grype, Trivy) report CVEs in the **Debian base-image packages** (openssl, gnutls, perl, glibc, …) — this is normal for any Debian/Ubuntu-based image, and none of them are in netmon's own code. In netmon's intended use (self-hosted on a trusted LAN, not exposed to the internet) the practical risk is low; the main rule is **don't expose the dashboard to the internet**.
+
+The image applies available Debian security patches at build time (`apt-get upgrade`), and the publish workflow **rebuilds weekly** to pick up new fixes as Debian releases them. So:
+
+- For automatic patches, track **`:latest`** or the rolling **`:1`** / **`:1.6`** tags — the weekly rebuild refreshes these.
+- An exact tag like **`:1.6.0`** is an **immutable snapshot** and is *not* re-patched. Pin it for reproducibility, but move it forward periodically for security.
+
+CVEs marked with no fixed version can't be resolved until Debian patches them upstream — that's true of every current Debian-based image.
+
 ### NAS deployment (Dockge / Portainer / Container Manager)
 
 For a NAS, use the ready-made `docker-compose.nas.yml` variant instead — it swaps the named volume for a bind mount (`./data`, so the database is visible on your NAS shares and easy to back up) and makes the dashboard port overridable via `WEB_PORT`:

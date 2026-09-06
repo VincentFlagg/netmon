@@ -14,6 +14,17 @@ control when you upgrade; see the [README](README.md#docker).
 
 _Nothing yet._
 
+## [1.6.1] - 2026-09-06
+
+### Security
+- The image now applies available Debian security patches at build time
+  (`apt-get upgrade`), clearing base-image CVEs that have upstream fixes
+  (openssl, gnutls, …). CVEs Debian hasn't patched yet remain until they do.
+- The publish workflow **rebuilds weekly** so new patches are applied without a
+  code change. Weekly rebuilds refresh `latest` and the rolling `X` / `X.Y`
+  tags; an exact `X.Y.Z` tag stays an immutable snapshot. README documents the
+  scanner findings and how to track patched tags.
+
 ## [1.6.0] - 2026-09-05
 
 ### Added
@@ -139,7 +150,8 @@ report engine.
   line, so generated graphs are correctly ignored.
 - README clone URLs now point at this repository.
 
-[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/VincentFlagg/netmon/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/VincentFlagg/netmon/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/VincentFlagg/netmon/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/VincentFlagg/netmon/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/VincentFlagg/netmon/compare/v1.3.0...v1.4.0

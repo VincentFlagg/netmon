@@ -17,6 +17,11 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
+  schedule:
+    # Weekly rebuild so Debian security patches (apt-get upgrade) get applied
+    # without needing a code change. Refreshes latest + the rolling X / X.Y
+    # tags; the exact X.Y.Z tag stays an immutable snapshot.
+    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -60,7 +65,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.ver.outputs.full }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.ver.outputs.full }},enable=${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' }}
             type=raw,value=${{ steps.ver.outputs.minor }},enable={{is_default_branch}}
             type=raw,value=${{ steps.ver.outputs.major }},enable={{is_default_branch}}
             type=ref,event=branch
