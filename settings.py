@@ -21,6 +21,13 @@ DEFAULTS: dict = {
     "ai_base_url": "",
     "ai_model": "",
     "ai_api_key": "",
+    # Subscribed plan (Mbps). 0 = unset -> status uses absolute thresholds.
+    # When set, the status line and AI judge speed relative to the plan.
+    "plan_download_mbps": 0,
+    "plan_upload_mbps": 0,
+    # Ping thresholds for the status line (ms).
+    "ping_good_ms": 20,
+    "ping_bad_ms": 40,
 }
 
 _DUMMY_TEMPLATE_CTX = {
@@ -58,6 +65,16 @@ def validate(updates: dict) -> tuple[dict, dict]:
         as_int("interval_seconds", 60, 86400)
     if "report_every" in updates:
         as_int("report_every", 1, 1000)
+    if "plan_download_mbps" in updates:
+        as_int("plan_download_mbps", 0, 100000)
+    if "plan_upload_mbps" in updates:
+        as_int("plan_upload_mbps", 0, 100000)
+    if "ping_good_ms" in updates:
+        as_int("ping_good_ms", 1, 100000)
+    if "ping_bad_ms" in updates:
+        as_int("ping_bad_ms", 1, 100000)
+    if "ping_good_ms" in cleaned and "ping_bad_ms" in cleaned and cleaned["ping_bad_ms"] < cleaned["ping_good_ms"]:
+        errors["ping_bad_ms"] = "'bad' ping must be greater than or equal to 'good' ping"
     if "active_hours_start" in updates:
         as_int("active_hours_start", 0, 24)
     if "active_hours_end" in updates:
@@ -166,6 +183,22 @@ class Settings:
     @property
     def ai_api_key(self) -> str:
         return self._values.get("ai_api_key", "")
+
+    @property
+    def plan_download_mbps(self) -> int:
+        return int(self._values.get("plan_download_mbps", 0))
+
+    @property
+    def plan_upload_mbps(self) -> int:
+        return int(self._values.get("plan_upload_mbps", 0))
+
+    @property
+    def ping_good_ms(self) -> int:
+        return int(self._values.get("ping_good_ms", 20))
+
+    @property
+    def ping_bad_ms(self) -> int:
+        return int(self._values.get("ping_bad_ms", 40))
 
     def within_active_window(self, now_local) -> bool:
         if now_local.weekday() not in self._values["active_days"]:

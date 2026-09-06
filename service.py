@@ -15,11 +15,25 @@ from notifier import ChatAction, Notifier
 log = logging.getLogger("netmon")
 
 
-def status_text_for(download_bps: float, ping: float) -> str:
+def status_text_for(
+    download_bps: float,
+    ping: float,
+    plan_download_mbps: int = 0,
+    ping_good_ms: int = 20,
+    ping_bad_ms: int = 40,
+) -> str:
     dl_speed = download_bps / 10**6
-    if dl_speed >= 150 and ping <= 20:
+    if plan_download_mbps and plan_download_mbps > 0:
+        # Judge download as a fraction of the subscribed plan.
+        pct = dl_speed / plan_download_mbps
+        dl_good, dl_bad = pct >= 0.85, pct < 0.5
+    else:
+        # No plan set — fall back to absolute broadband thresholds.
+        dl_good, dl_bad = dl_speed >= 150, dl_speed < 60
+
+    if dl_good and ping <= ping_good_ms:
         return "Good speed and low latency"
-    if dl_speed < 60 or ping > 40:
+    if dl_bad or ping > ping_bad_ms:
         return (
             "A bunch of idiots decided to stream 4K movies all at once, or the "
             "ISP's mice were busy chewing on the fiber line again, whatever"
@@ -168,7 +182,12 @@ class Monitor:
             server=metric.server,
             download_mb=metric.bytes_received / 10**6,
             upload_mb=metric.bytes_sent / 10**6,
-            status_text=status_text_for(metric.download, metric.ping),
+            status_text=status_text_for(
+                metric.download, metric.ping,
+                self.settings.plan_download_mbps,
+                self.settings.ping_good_ms,
+                self.settings.ping_bad_ms,
+            ),
         )
         template = self.settings.mini_report_template
         try:
@@ -211,6 +230,22 @@ class Monitor:
     def _send_detailed_report(self):
         metrics, device_counts = self.db.get_metrics_with_device_counts()
         user_message = self._build_report_user_message(metrics, device_counts)
+
+        # Tell the AI the subscribed plan so it judges speeds relative to it
+        # (a 50 Mbps reading on a 50 Mbps plan is fine, not "slow").
+        if self.settings.plan_download_mbps:
+            plan = (
+                f"The user's subscribed internet plan is about "
+                f"{self.settings.plan_download_mbps} Mbps download"
+            )
+            if self.settings.plan_upload_mbps:
+                plan += f" / {self.settings.plan_upload_mbps} Mbps upload"
+            plan += (
+                ". Judge the speeds RELATIVE TO THIS PLAN — hitting close to the "
+                "plan is good, not slow. Note that this is a single-connection "
+                "measurement, which normally reads a bit below the plan's rated speed.\n\n"
+            )
+            user_message = plan + user_message
 
         self.notifier.send_chat_action(ChatAction.TYPING)
         ai_client = self._get_ai_client()

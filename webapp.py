@@ -519,6 +519,34 @@ ADMIN_HTML = """<!doctype html>
   </div>
 
   <div class="form-card">
+    <h3>Connection &amp; plan</h3>
+    <p class="help">Your subscribed speeds, so the status line and AI judge performance relative to your plan
+      instead of assuming a fast line. Leave download at <span class="mono">0</span> to use absolute thresholds.
+      Speed tests are single-connection, so they read a bit below the rated plan.</p>
+    <div class="row">
+      <div>
+        <label>Plan download (Mbps)</label>
+        <input type="number" id="plan_download_mbps" min="0" max="100000">
+      </div>
+      <div>
+        <label>Plan upload (Mbps)</label>
+        <input type="number" id="plan_upload_mbps" min="0" max="100000">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Good ping — at or below (ms)</label>
+        <input type="number" id="ping_good_ms" min="1" max="100000">
+      </div>
+      <div>
+        <label>Bad ping — above (ms)</label>
+        <input type="number" id="ping_bad_ms" min="1" max="100000">
+      </div>
+    </div>
+    <div class="err" id="err_ping_bad_ms"></div>
+  </div>
+
+  <div class="form-card">
     <h3>Status message</h3>
     <p class="help">The short update sent each run. Placeholders:
       <span class="mono">{timestamp} {client} {server} {device_count} {download} {upload} {ping} {download_mb} {upload_mb} {status_text}</span>.
@@ -568,7 +596,8 @@ ADMIN_HTML = """<!doctype html>
 <footer>netmon · admin</footer>
 <script>
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const NUM = ["interval_seconds","report_every","active_hours_start","active_hours_end"];
+const NUM = ["interval_seconds","report_every","active_hours_start","active_hours_end",
+             "plan_download_mbps","plan_upload_mbps","ping_good_ms","ping_bad_ms"];
 const TXT = ["mini_report_template","report_system_prompt","ai_base_url","ai_model"];
 
 function renderDays(active) {
